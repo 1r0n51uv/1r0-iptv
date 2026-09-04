@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.IptvApp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/tv_background</item>
+        <item name="android:colorBackground">@color/tv_background</item>
+    </style>
+</resources>
