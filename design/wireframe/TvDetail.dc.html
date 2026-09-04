@@ -15,7 +15,11 @@
     .ep-thumb { width:96px; height:54px; border-radius:6px; background:#262b33; flex-shrink:0; }
   </style>
 </helmet>
-<div style="width:1280px; height:720px; background:#14161a; color:#f2f2f0; display:flex; overflow:hidden; padding:36px 44px; gap:36px;">
+<div style="width:1280px; height:720px; background:#14161a; color:#f2f2f0; position:relative; display:flex; overflow:hidden; padding:36px 44px; gap:36px;">
+
+  <div style="position:absolute; top:20px; right:24px;">
+    <div onClick="{{toggleKind}}" style="cursor:pointer; padding:8px 14px; border-radius:20px; background:#1f232a; color:#c7cad0; font-size:12px; font-weight:600;">Esempio: {{kindLabel}} (cambia)</div>
+  </div>
 
   <div style="width:260px; height:370px; flex-shrink:0; border-radius:12px; background:#262b33; display:flex; align-items:center; justify-content:center; color:#4a505c;">
     <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 16h18M9 3v18"/></svg>
@@ -23,48 +27,66 @@
 
   <div style="flex:1; display:flex; flex-direction:column; gap:16px; overflow:hidden;">
     <div>
-      <div style="display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.04em; padding:3px 7px; border-radius:4px; background:#8b5cf6; color:#14161a; margin-bottom:8px;">SERIE</div>
-      <div style="font-size:28px; font-weight:700;">The Bear</div>
-      <div style="font-size:14px; color:#9aa0aa; margin-top:4px;">2022–2024 · Commedia drammatica · 3 stagioni</div>
+      <div style="display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.04em; padding:3px 7px; border-radius:4px; background:{{badgeColor}}; color:#14161a; margin-bottom:8px;">{{badgeLabel}}</div>
+      <div style="font-size:28px; font-weight:700;">{{title}}</div>
+      <div style="font-size:14px; color:#9aa0aa; margin-top:4px;">{{meta}}</div>
     </div>
     <div style="font-size:14px; color:#c7cad0; line-height:1.6; max-width:640px;">
-      Carmy, giovane chef stellato, torna a Chicago per gestire la trattoria di famiglia dopo un lutto, tra caos in cucina e rapporti familiari complicati.
-    </div>
-    <div style="display:flex; gap:12px; margin-top:4px;">
-      <div style="display:flex; align-items:center; gap:8px; background:#ffb454; color:#14161a; font-weight:700; font-size:14px; padding:10px 18px; border-radius:8px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        Riprendi · S02E04 (12:30 rimanenti)
-      </div>
-      <div style="display:flex; align-items:center; gap:8px; background:#262b33; color:#f2f2f0; font-weight:600; font-size:14px; padding:10px 18px; border-radius:8px;">
-        Vai alla Stagione 1
-      </div>
+      {{plot}}
     </div>
 
-    <div style="display:flex; gap:10px; margin-top:8px;">
-      <sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
-        <div class="tab" onClick="{{tab.select}}" style="{{tab.style}}">{{tab.label}}</div>
-      </sc-for>
-    </div>
-
-    <div style="display:flex; flex-direction:column; gap:4px; overflow:hidden;">
-      <sc-if value="{{isUnnumbered}}" hint-placeholder-val="{{false}}">
-        <div style="font-size:12px; color:#6d7380; margin-bottom:4px;">Episodi rilevati dalla Sorgente senza numero di stagione/episodio riconoscibile.</div>
-      </sc-if>
-      <sc-for list="{{episodes}}" as="ep" hint-placeholder-count="4">
-        <div class="ep-row" onClick="{{ep.select}}" style="{{ep.rowStyle}}">
-          <div class="ep-thumb"></div>
-          <div style="flex:1; overflow:hidden;">
-            <div style="font-size:14px; font-weight:600; color:#f2f2f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ep.title}}</div>
-            <div style="font-size:12px; color:#9aa0aa;">{{ep.meta}}</div>
-          </div>
-          <sc-if value="{{ep.hasProgress}}" hint-placeholder-val="{{false}}">
-            <div style="width:64px; height:4px; background:#3a3f48; border-radius:2px; overflow:hidden;">
-              <div style="{{ep.progressBarStyle}}"></div>
-            </div>
-          </sc-if>
+    <sc-if value="{{isSerie}}" hint-placeholder-val="{{true}}">
+      <div style="display:flex; gap:12px; margin-top:4px;">
+        <div style="display:flex; align-items:center; gap:8px; background:#ffb454; color:#14161a; font-weight:700; font-size:14px; padding:10px 18px; border-radius:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Riprendi · S02E04 (12:30 rimanenti)
         </div>
-      </sc-for>
-    </div>
+        <div style="display:flex; align-items:center; gap:8px; background:#262b33; color:#f2f2f0; font-weight:600; font-size:14px; padding:10px 18px; border-radius:8px;">
+          Vai alla Stagione 1
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
+          <div class="tab" onClick="{{tab.select}}" style="{{tab.style}}">{{tab.label}}</div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:4px; overflow:hidden;">
+        <sc-if value="{{isUnnumbered}}" hint-placeholder-val="{{false}}">
+          <div style="font-size:12px; color:#6d7380; margin-bottom:4px;">Episodi rilevati dalla Sorgente senza numero di stagione/episodio riconoscibile.</div>
+        </sc-if>
+        <sc-for list="{{episodes}}" as="ep" hint-placeholder-count="4">
+          <div class="ep-row" onClick="{{ep.select}}" style="{{ep.rowStyle}}">
+            <div class="ep-thumb"></div>
+            <div style="flex:1; overflow:hidden;">
+              <div style="font-size:14px; font-weight:600; color:#f2f2f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ep.title}}</div>
+              <div style="font-size:12px; color:#9aa0aa;">{{ep.meta}}</div>
+            </div>
+            <sc-if value="{{ep.hasProgress}}" hint-placeholder-val="{{false}}">
+              <div style="width:64px; height:4px; background:#3a3f48; border-radius:2px; overflow:hidden;">
+                <div style="{{ep.progressBarStyle}}"></div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isFilm}}" hint-placeholder-val="{{false}}">
+      <div style="display:flex; gap:12px; margin-top:4px;">
+        <div style="display:flex; align-items:center; gap:8px; background:#ffb454; color:#14161a; font-weight:700; font-size:14px; padding:10px 18px; border-radius:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Riprendi da 42:10 (mancano 38 min)
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; background:#262b33; color:#f2f2f0; font-weight:600; font-size:14px; padding:10px 18px; border-radius:8px;">
+          Play dall'inizio
+        </div>
+      </div>
+      <div style="margin-top:8px; width:340px; height:5px; background:#3a3f48; border-radius:2px; overflow:hidden;">
+        <div style="height:100%; width:53%; background:#ffb454;"></div>
+      </div>
+    </sc-if>
   </div>
 </div>
 </x-dc>
@@ -85,12 +107,18 @@ const SEASONS = {
     { id: 'ex2', title: 'Intervista al cast', meta: '22 min' }
   ]}
 };
+const FILM = {
+  title: 'Dune: Parte Due',
+  meta: '2024 · Fantascienza · 2h 46min',
+  plot: 'Paul Atreides si unisce ai Fremen per vendicare la sua famiglia, mentre cerca di impedire un futuro oscuro che solo lui può prevedere.'
+};
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { season: 's2', selectedEp: 'e204' };
+    this.state = { kind: 'serie', season: 's2', selectedEp: 'e204' };
   }
   renderVals() {
+    const isSerie = this.state.kind === 'serie';
     const tabs = Object.keys(SEASONS).map((key) => {
       const active = this.state.season === key;
       return {
@@ -111,7 +139,20 @@ class Component extends DCLogic {
         select: () => this.setState({ selectedEp: ep.id })
       };
     });
-    return { tabs, episodes, isUnnumbered: !!current.unnumbered };
+    return {
+      isSerie,
+      isFilm: !isSerie,
+      kindLabel: isSerie ? 'Serie' : 'Film',
+      toggleKind: () => this.setState({ kind: isSerie ? 'film' : 'serie' }),
+      badgeLabel: isSerie ? 'SERIE' : 'FILM',
+      badgeColor: isSerie ? '#8b5cf6' : '#3b82f6',
+      title: isSerie ? 'The Bear' : FILM.title,
+      meta: isSerie ? '2022–2024 · Commedia drammatica · 3 stagioni' : FILM.meta,
+      plot: isSerie ? 'Carmy, giovane chef stellato, torna a Chicago per gestire la trattoria di famiglia dopo un lutto, tra caos in cucina e rapporti familiari complicati.' : FILM.plot,
+      tabs,
+      episodes,
+      isUnnumbered: !!current.unnumbered
+    };
   }
 }
 </script>

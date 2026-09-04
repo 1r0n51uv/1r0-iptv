@@ -107,6 +107,23 @@
         </sc-for>
       </div>
     </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <p class="tv-row-title">Serie</p>
+      <div style="display:flex; gap:16px;">
+        <sc-for list="{{serie}}" as="card" hint-placeholder-count="5">
+          <div onClick="{{card.select}}" style="width:220px; cursor:pointer; display:flex; flex-direction:column; gap:8px;">
+            <div style="{{card.thumbStyle}}">
+              <div class="tv-badge" style="background:{{card.badgeColor}}">{{card.badge}}</div>
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; color:#4a505c;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h18M3 16h18"/></svg>
+              </div>
+            </div>
+            <div class="tv-card-title">{{card.title}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
   </div>
 </div>
 </x-dc>
@@ -148,7 +165,14 @@ class Component extends DCLogic {
       { id: 'film-4', title: 'Anatomia di una Caduta', badge: 'FILM', badgeColor: '#3b82f6' },
       { id: 'film-5', title: 'La Zona d’Interesse', badge: 'FILM', badgeColor: '#3b82f6' }
     ].map((c) => this.makeCard(c));
-    return { favoriti, liveOra, film };
+    const serie = [
+      { id: 'serie-1', title: 'The Bear', badge: 'SERIE', badgeColor: '#8b5cf6' },
+      { id: 'serie-2', title: 'Slow Horses', badge: 'SERIE', badgeColor: '#8b5cf6' },
+      { id: 'serie-3', title: 'Shogun', badge: 'SERIE', badgeColor: '#8b5cf6' },
+      { id: 'serie-4', title: 'Fargo', badge: 'SERIE', badgeColor: '#8b5cf6' },
+      { id: 'serie-5', title: "C'è ancora domani", badge: 'SERIE', badgeColor: '#8b5cf6' }
+    ].map((c) => this.makeCard(c));
+    return { favoriti, liveOra, film, serie };
   }
 }
 </script>
