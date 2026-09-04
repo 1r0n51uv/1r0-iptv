@@ -16,7 +16,8 @@ sealed interface ContentCard {
     data class Film(
         override val title: String,
         override val imageUrl: String?,
-        val streamUrl: String
+        val streamUrl: String,
+        val plot: String? = null
     ) : ContentCard
 
     sealed interface SerieCard : ContentCard {
@@ -30,7 +31,8 @@ sealed interface ContentCard {
             override val title: String,
             override val imageUrl: String?,
             val seriesId: Int,
-            val connection: XtreamConnection
+            val connection: XtreamConnection,
+            val plot: String? = null
         ) : SerieCard
     }
 }

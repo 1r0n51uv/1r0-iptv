@@ -83,7 +83,7 @@ class ContentFetcher(
             streamJsonArray(xtreamApiUrl(connection, "get_vod_streams")) { readVodStreamDto() }
                 .map { dto ->
                     val movie = xtreamMapper.toMovie(dto, connection)
-                    ContentCard.Film(title = movie.title, imageUrl = movie.poster, streamUrl = movie.url)
+                    ContentCard.Film(title = movie.title, imageUrl = movie.poster, streamUrl = movie.url, plot = movie.plot)
                 }
         }
 
@@ -94,7 +94,8 @@ class ContentFetcher(
                         title = item.name,
                         imageUrl = item.cover,
                         seriesId = item.seriesId,
-                        connection = connection
+                        connection = connection,
+                        plot = item.plot
                     )
                 }
         }
@@ -157,7 +158,7 @@ private fun xtreamApiUrl(connection: XtreamConnection, action: String): String =
     "http://${connection.host}:${connection.port}/player_api.php" +
         "?username=${connection.username}&password=${connection.password}&action=$action"
 
-private data class SeriesListItem(val seriesId: Int, val name: String, val cover: String?)
+private data class SeriesListItem(val seriesId: Int, val name: String, val cover: String?, val plot: String?)
 
 private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
     var name = ""
@@ -207,17 +208,19 @@ private fun JsonReader.readSeriesListItem(): SeriesListItem {
     var seriesId = -1
     var name = ""
     var cover: String? = null
+    var plot: String? = null
     beginObject()
     while (hasNext()) {
         when (nextName()) {
             "series_id" -> seriesId = nextIntFlexible()
             "name" -> name = nextStringFlexible()
             "cover" -> cover = nextStringOrNull()
+            "plot" -> plot = nextStringOrNull()
             else -> skipValue()
         }
     }
     endObject()
-    return SeriesListItem(seriesId, name, cover)
+    return SeriesListItem(seriesId, name, cover, plot)
 }
 
 private fun JsonReader.nextStringOrNull(): String? = when (peek()) {
