@@ -1,7 +1,11 @@
 package com.ir0.iptv.app
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +26,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -149,6 +159,12 @@ private fun HeroSection(
         is ContentCard.SerieCard -> ({ onSerieClick(hero) })
     }
 
+    val focusRequester = remember { FocusRequester() }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.05f else 1f, label = "heroButtonScale")
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
     Column(
         modifier = Modifier.padding(horizontal = 36.dp).widthIn(max = 600.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -168,9 +184,14 @@ private fun HeroSection(
         Row(
             modifier = Modifier
                 .padding(top = 10.dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFFFFB454))
-                .clickable(onClick = onClick)
+                .then(
+                    if (isFocused) Modifier.border(3.dp, Color(0xFFF2F2F0), RoundedCornerShape(8.dp)) else Modifier
+                )
+                .focusRequester(focusRequester)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             Text(text = buttonLabel, color = Color(0xFF14161A), fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -222,8 +243,14 @@ private fun <T : ContentCard> ContentRow(titolo: String, items: List<T>, onClick
 private fun ContentCardView(card: ContentCard, tall: Boolean, onClick: () -> Unit) {
     val cardWidth = if (tall) 148.dp else 200.dp
     val cardHeight = if (tall) 210.dp else 110.dp
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.1f else 1f, label = "cardScale")
     Column(
-        modifier = Modifier.width(cardWidth).clickable(onClick = onClick),
+        modifier = Modifier
+            .width(cardWidth)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
@@ -232,6 +259,9 @@ private fun ContentCardView(card: ContentCard, tall: Boolean, onClick: () -> Uni
                 .height(cardHeight)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF262B33))
+                .then(
+                    if (isFocused) Modifier.border(3.dp, Color(0xFFFFB454), RoundedCornerShape(10.dp)) else Modifier
+                )
         ) {
             val imageUrl = card.imageUrl
             if (imageUrl != null) {
@@ -245,8 +275,9 @@ private fun ContentCardView(card: ContentCard, tall: Boolean, onClick: () -> Uni
         }
         Text(
             text = card.title,
-            color = Color(0xFFF2F2F0),
+            color = if (isFocused) Color(0xFFFFB454) else Color(0xFFF2F2F0),
             fontSize = 14.sp,
+            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
             maxLines = if (tall) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(cardWidth)

@@ -1,13 +1,17 @@
 package com.ir0.iptv.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -112,14 +116,27 @@ private fun SeriesDetailContent(serie: Serie, onEpisodioClick: (Episodio) -> Uni
                         )
                     }
                     items(stagione.episodes) { episodio ->
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val isFocused by interactionSource.collectIsFocusedAsState()
                         Text(
                             text = episodio.episodeNumber?.let { "$it. ${episodio.title}" } ?: episodio.title,
-                            color = Color(0xFFF2F2F0),
+                            color = if (isFocused) Color(0xFFFFB454) else Color(0xFFF2F2F0),
+                            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 16.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onEpisodioClick(episodio) }
-                                .padding(vertical = 10.dp)
+                                .clickable(
+                                    interactionSource = interactionSource,
+                                    indication = null
+                                ) { onEpisodioClick(episodio) }
+                                .then(
+                                    if (isFocused) {
+                                        Modifier.border(2.dp, Color(0xFFFFB454), RoundedCornerShape(6.dp))
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 10.dp)
                         )
                     }
                 }
