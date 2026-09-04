@@ -35,11 +35,17 @@ class SorgenteFactory(
             id = id,
             nome = nome.trim(),
             connection = XtreamConnection(
-                host = host.trim(),
+                host = normalizeHost(host),
                 port = port,
                 username = username.trim(),
                 password = password
             )
         )
     }
+
+    private fun normalizeHost(host: String): String = host.trim()
+        .removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore("/")
+        .substringBefore(":")
 }

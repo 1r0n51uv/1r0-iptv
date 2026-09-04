@@ -55,6 +55,32 @@ class SorgenteFactoryTest {
     }
 
     @Test
+    fun `creaXtream strips a http or https scheme and trailing path from host`() {
+        val sorgente = factory.creaXtream(
+            nome = "Provider",
+            host = "http://7qcpnm.stkyn.com/",
+            port = 8080,
+            username = "u",
+            password = "p"
+        )
+
+        assertEquals("7qcpnm.stkyn.com", (sorgente.connection).host)
+    }
+
+    @Test
+    fun `creaXtream strips a port embedded in the host string`() {
+        val sorgente = factory.creaXtream(
+            nome = "Provider",
+            host = "https://iptv.provider.example:8080",
+            port = 8080,
+            username = "u",
+            password = "p"
+        )
+
+        assertEquals("iptv.provider.example", sorgente.connection.host)
+    }
+
+    @Test
     fun `creaXtream rejects a blank host`() {
         assertThrows(IllegalArgumentException::class.java) {
             factory.creaXtream(nome = "Provider", host = " ", port = 8080, username = "u", password = "p")

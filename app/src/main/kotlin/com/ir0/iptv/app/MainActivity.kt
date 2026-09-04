@@ -20,7 +20,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,12 +34,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
+import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
+import com.ir0.iptv.domain.source.Sorgente
+import com.ir0.iptv.domain.source.m3u.M3uEntry
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.SocketException
 import java.util.Collections
+import kotlinx.coroutines.delay
+
+private const val SORGENTI_POLL_INTERVAL_MS = 2000L
 
 private const val QR_CODE_SIZE_PX = 768
 private val MIN_TEXT_COLUMN_WIDTH = 280.dp
@@ -44,9 +55,36 @@ private val ROW_SPACING = 64.dp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val sorgenteRepository = SorgenteRepository(applicationContext)
         setContent {
-            OnboardingScreen(webPanelAddress = remember { localWebPanelAddress() })
+            var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
+            LaunchedEffect(Unit) {
+                while (sorgenti.isEmpty()) {
+                    delay(SORGENTI_POLL_INTERVAL_MS)
+                    sorgenti = sorgenteRepository.elenco()
+                }
+            }
+
+            if (sorgenti.isEmpty()) {
+                OnboardingScreen(webPanelAddress = remember { localWebPanelAddress() })
+            } else {
+                ContentScreen(sorgenti)
+            }
         }
+    }
+}
+
+@Composable
+private fun ContentScreen(sorgenti: List<Sorgente>) {
+    var canali by remember(sorgenti) { mutableStateOf<List<M3uEntry>?>(null) }
+    LaunchedEffect(sorgenti) {
+        canali = ContentFetcher().canali(sorgenti)
+    }
+    val canaliCorrenti = canali
+    if (canaliCorrenti == null) {
+        LoadingScreen()
+    } else {
+        HomeScreen(canaliCorrenti)
     }
 }
 
