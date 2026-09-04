@@ -2,7 +2,8 @@ package com.ir0.iptv.domain.classification
 
 data class Serie(
     val name: String,
-    val seasons: List<Stagione>
+    val seasons: List<Stagione>,
+    val poster: String? = null
 )
 
 data class Stagione(

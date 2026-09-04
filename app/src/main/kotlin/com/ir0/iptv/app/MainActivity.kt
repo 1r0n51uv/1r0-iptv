@@ -2,6 +2,7 @@ package com.ir0.iptv.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,12 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.content.ContentCatalog
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
 import com.ir0.iptv.domain.source.Sorgente
-import com.ir0.iptv.domain.source.m3u.M3uEntry
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.SocketException
@@ -76,15 +77,35 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ContentScreen(sorgenti: List<Sorgente>) {
-    var canali by remember(sorgenti) { mutableStateOf<List<M3uEntry>?>(null) }
+    var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     LaunchedEffect(sorgenti) {
-        canali = ContentFetcher().canali(sorgenti)
+        catalogo = ContentFetcher().catalogo(sorgenti)
     }
-    val canaliCorrenti = canali
-    if (canaliCorrenti == null) {
+    val catalogoCorrente = catalogo
+    if (catalogoCorrente == null) {
         LoadingScreen()
-    } else {
-        HomeScreen(canaliCorrenti)
+        return
+    }
+
+    var backStack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
+    BackHandler(enabled = backStack.size > 1) {
+        backStack = backStack.dropLast(1)
+    }
+
+    when (val schermata = backStack.last()) {
+        is Screen.Home -> HomeScreen(
+            catalogo = catalogoCorrente,
+            onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
+            onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
+            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it.serie) }
+        )
+
+        is Screen.SeriesDetail -> SeriesDetailScreen(
+            serie = schermata.serie,
+            onEpisodioClick = { episodio -> backStack = backStack + Screen.Player(episodio.title, episodio.url) }
+        )
+
+        is Screen.Player -> PlayerScreen(title = schermata.title, streamUrl = schermata.streamUrl)
     }
 }
 

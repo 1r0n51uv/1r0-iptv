@@ -43,6 +43,9 @@ dependencies {
     implementation(libs.ktor.server.cio)
     implementation(libs.zxing.core)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.coil.compose)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

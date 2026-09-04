@@ -46,6 +46,6 @@ class XtreamMapper {
                         }
                 )
             }
-        return Serie(name = dto.seriesName, seasons = seasons)
+        return Serie(name = dto.seriesName, seasons = seasons, poster = dto.cover)
     }
 }

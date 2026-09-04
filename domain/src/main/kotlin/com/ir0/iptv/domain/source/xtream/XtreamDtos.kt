@@ -34,5 +34,6 @@ data class XtreamEpisodeDto(
 
 data class XtreamSeriesInfoDto(
     val seriesName: String,
-    val episodesBySeason: Map<Int, List<XtreamEpisodeDto>>
+    val episodesBySeason: Map<Int, List<XtreamEpisodeDto>>,
+    val cover: String? = null
 )

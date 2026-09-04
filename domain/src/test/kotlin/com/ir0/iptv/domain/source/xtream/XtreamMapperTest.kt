@@ -72,12 +72,14 @@ class XtreamMapperTest {
                     XtreamEpisodeDto(id = 101, episodeNum = 1, title = "Sistemi", containerExtension = "mp4"),
                     XtreamEpisodeDto(id = 102, episodeNum = 2, title = "Pasta", containerExtension = "mp4")
                 )
-            )
+            ),
+            cover = "http://logos.example/thebear.jpg"
         )
 
         val serie = XtreamMapper().toSerie(dto, connection)
 
         assertEquals("The Bear", serie.name)
+        assertEquals("http://logos.example/thebear.jpg", serie.poster)
         assertEquals(listOf(1, 2), serie.seasons.map { it.number })
         assertEquals(
             listOf("Sistemi", "Pasta"),
