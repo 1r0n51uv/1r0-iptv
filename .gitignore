@@ -15,3 +15,6 @@
 # skip the seeded editor payload (regenerated via seed-canvas.mjs, ~2.5MB, not source)
 design/**/*.html
 !design/**/*.dc.html
+
+# Gradle wrapper distribution cache stays local
+.gradle/

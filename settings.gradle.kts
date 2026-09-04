@@ -15,4 +15,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "1r0-iptv"
-include(":app")
+// ":app" (Android TV app + embedded web panel) is added once its module is scaffolded.
+include(":domain")
