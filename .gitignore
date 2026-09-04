@@ -1,0 +1,17 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Design wireframes: keep the .dc.html sources and canvas.json,
+# skip the seeded editor payload (regenerated via seed-canvas.mjs, ~2.5MB, not source)
+design/**/*.html
+!design/**/*.dc.html

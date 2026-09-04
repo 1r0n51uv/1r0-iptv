@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #14161a; }
+    .tv-icon-btn { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #9aa0aa; }
+    .tv-icon-btn.active { background: #ffb454; color: #14161a; }
+    .kbrow { display:flex; gap:8px; }
+    .key { width:38px; height:38px; border-radius:6px; background:#1f232a; display:flex; align-items:center; justify-content:center; font-size:14px; color:#d7dae0; border:1px solid #262b33; }
+    .tv-badge { position: absolute; top: 7px; left: 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; color: #14161a; }
+  </style>
+</helmet>
+<div style="width:1280px; height:720px; background:#14161a; color:#f2f2f0; display:flex; overflow:hidden;">
+  <div style="width:96px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:22px; padding:28px 0; background:#191c22; border-right:1px solid #262b33;">
+    <div class="tv-icon-btn">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+    </div>
+    <div class="tv-icon-btn active">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    </div>
+    <div class="tv-icon-btn">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
+    </div>
+    <div class="tv-icon-btn">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20s-7-4.35-9.3-8.8C1.2 8 3 5 6.2 5c1.8 0 3.1 1 3.8 2.1C10.7 6 12 5 13.8 5 17 5 18.8 8 17.3 11.2 15 15.65 12 20 12 20z"/></svg>
+    </div>
+  </div>
+
+  <div style="flex:1; display:flex; gap:32px; padding:30px 40px; overflow:hidden;">
+    <div style="width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:22px;">
+      <div style="display:flex; align-items:center; gap:10px; background:#1f232a; border:2px solid #ffb454; border-radius:10px; padding:12px 14px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9aa0aa" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input value="{{query}}" onInput="{{onQueryInput}}" placeholder="Cerca canali, film, serie…" style="flex:1; border:none; outline:none; background:transparent; color:#f2f2f0; font-size:16px; font-family:system-ui, sans-serif;" />
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="kbrow"><div class="key">1</div><div class="key">2</div><div class="key">3</div><div class="key">4</div><div class="key">5</div></div>
+        <div class="kbrow"><div class="key">Q</div><div class="key">W</div><div class="key">E</div><div class="key">R</div><div class="key">T</div></div>
+        <div class="kbrow"><div class="key">A</div><div class="key">S</div><div class="key">D</div><div class="key">F</div><div class="key">G</div></div>
+        <div class="kbrow"><div class="key">Z</div><div class="key">X</div><div class="key">C</div><div class="key">V</div><div class="key">B</div></div>
+        <div style="font-size:12px; color:#6d7380; margin-top:4px;">Tastiera virtuale da telecomando (semplificata)</div>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; gap:16px; overflow:hidden;">
+      <div style="font-size:15px; color:#9aa0aa;">{{resultsLabel}}</div>
+      <div style="display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:16px;">
+        <sc-for list="{{results}}" as="card" hint-placeholder-count="6">
+          <div onClick="{{card.select}}" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;">
+            <div style="{{card.thumbStyle}}">
+              <div class="tv-badge" style="background:{{card.badgeColor}}">{{card.badge}}</div>
+            </div>
+            <div style="font-size:14px; color:#f2f2f0; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{card.title}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script>
+const ITEMS = [
+  { id: 's1', title: 'Rai 1', badge: 'LIVE', badgeColor: '#e0483c' },
+  { id: 's2', title: 'Sky Sport Calcio', badge: 'LIVE', badgeColor: '#e0483c' },
+  { id: 's3', title: 'Rai Sport', badge: 'LIVE', badgeColor: '#e0483c' },
+  { id: 's4', title: 'Dune: Parte Due', badge: 'FILM', badgeColor: '#3b82f6' },
+  { id: 's5', title: 'Oppenheimer', badge: 'FILM', badgeColor: '#3b82f6' },
+  { id: 's6', title: 'The Bear', badge: 'SERIE', badgeColor: '#8b5cf6' },
+  { id: 's7', title: 'Slow Horses', badge: 'SERIE', badgeColor: '#8b5cf6' },
+  { id: 's8', title: 'Canale 5', badge: 'LIVE', badgeColor: '#e0483c' }
+];
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { query: '', selectedId: null };
+  }
+  renderVals() {
+    const q = this.state.query.trim().toLowerCase();
+    const filtered = q ? ITEMS.filter((i) => i.title.toLowerCase().includes(q)) : ITEMS;
+    const results = filtered.map((item) => {
+      const selected = this.state.selectedId === item.id;
+      const border = selected ? '3px solid #ffb454' : '3px solid transparent';
+      return {
+        ...item,
+        thumbStyle: 'position:relative;height:110px;border-radius:8px;background:#262b33;border:' + border + ';',
+        select: () => this.setState({ selectedId: item.id })
+      };
+    });
+    return {
+      query: this.state.query,
+      onQueryInput: (e) => this.setState({ query: e.target.value }),
+      results,
+      resultsLabel: q ? results.length + ' risultati per "' + this.state.query + '"' : 'Suggeriti'
+    };
+  }
+}
+</script>
+</body>
+</html>

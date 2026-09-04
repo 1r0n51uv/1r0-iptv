@@ -1,0 +1,34 @@
+{
+  "pages": [
+    { "id": "page-tv", "name": "App TV" },
+    { "id": "page-web", "name": "Pannello Web" }
+  ],
+  "artboards": [
+    { "file": "TvOnboarding.dc.html", "x": 0, "y": 0, "w": 1280, "h": 720, "page": "page-tv" },
+    { "file": "Main.dc.html", "x": 1360, "y": 0, "w": 1280, "h": 720, "page": "page-tv", "title": "TvHome" },
+    { "file": "TvEpgGuide.dc.html", "x": 2720, "y": 0, "w": 1280, "h": 720, "page": "page-tv" },
+    { "file": "TvSearch.dc.html", "x": 0, "y": 820, "w": 1280, "h": 720, "page": "page-tv" },
+    { "file": "TvFavorites.dc.html", "x": 1360, "y": 820, "w": 1280, "h": 720, "page": "page-tv" },
+    { "file": "TvDetail.dc.html", "x": 2720, "y": 820, "w": 1280, "h": 720, "page": "page-tv" },
+    { "file": "TvPlayer.dc.html", "x": 1360, "y": 1640, "w": 1280, "h": 720, "page": "page-tv" },
+
+    { "file": "WebSources.dc.html", "x": 0, "y": 0, "w": 1200, "h": 900, "page": "page-web" },
+    { "file": "WebSourceForm.dc.html", "x": 1300, "y": 0, "w": 1200, "h": 900, "page": "page-web" },
+    { "file": "WebContentManage.dc.html", "x": 0, "y": 1000, "w": 1200, "h": 950, "page": "page-web" }
+  ],
+  "annotations": [
+    { "id": "note-tv-1", "x": 0, "y": -110, "w": 1280, "text": "1. Primo avvio: nessuna Sorgente → istruzioni per il Pannello Web", "page": "page-tv" },
+    { "id": "note-tv-2", "x": 1360, "y": -110, "w": 1280, "text": "2. Home: righe per Preferiti / In onda ora / Film. Click su una card = focus D-pad", "page": "page-tv" },
+    { "id": "note-tv-3", "x": 2720, "y": -110, "w": 1280, "text": "3. Guida EPG: click su un programma per selezionarlo", "page": "page-tv" },
+    { "id": "note-tv-4", "x": 0, "y": 710, "w": 1280, "text": "4. Ricerca: digita per filtrare canali/film/serie misti", "page": "page-tv" },
+    { "id": "note-tv-5", "x": 1360, "y": 710, "w": 1280, "text": "5. Preferiti: griglia unica mista", "page": "page-tv" },
+    { "id": "note-tv-6", "x": 2720, "y": 710, "w": 1280, "text": "6. Dettaglio Serie: tab Stagioni, 'Altri episodi' = fallback senza numero", "page": "page-tv" },
+    { "id": "note-tv-7", "x": 1360, "y": 1530, "w": 1280, "text": "7. Player: pulsante in alto a destra alterna vista Film/Serie ↔ Live TV", "page": "page-tv" },
+    { "id": "note-tv-flow", "x": 0, "y": 2440, "w": 1280, "text": "Nota: qui sotto ogni schermata è interattiva al suo interno (focus, tab, toggle, ricerca). Il passaggio da una schermata all'altra si valuta spostandosi sul canvas, come in Figma — nella app reale un tap porterà davvero da una all'altra.", "page": "page-tv" },
+
+    { "id": "note-web-1", "x": 0, "y": -110, "w": 1200, "text": "8. Lista Sorgenti: stato ultimo refresh, 'Aggiorna ora' simula un refresh", "page": "page-web" },
+    { "id": "note-web-2", "x": 1300, "y": -110, "w": 1200, "text": "9. Form Sorgente: il toggle M3U/Xtream cambia i campi mostrati", "page": "page-web" },
+    { "id": "note-web-3", "x": 0, "y": 890, "w": 1200, "text": "10. Gestione contenuti: filtri per tipo, toggle Nascosto/Preferito, e per le voci da M3U un menu per correggere il Tipo quando l'euristica sbaglia", "page": "page-web" }
+  ],
+  "launch": { "view": "canvas", "page": "page-tv" }
+}

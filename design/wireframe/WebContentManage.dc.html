@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f5f5f4; }
+    a { color: #b45309; } a:hover { color: #92400e; }
+    table { width:100%; border-collapse: collapse; }
+    th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:#8a8a84; font-weight:600; padding:10px 14px; border-bottom:1px solid #e5e5e2; }
+    td { padding:11px 14px; border-bottom:1px solid #eeeeeb; font-size:13.5px; color:#1c1c1a; vertical-align:middle; }
+    .tab { padding:8px 4px; font-size:14px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; }
+    .tab.active { color:#b45309; border-bottom-color:#b45309; }
+    .pill { padding:7px 14px; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid #d9d9d5; color:#3a3a36; background:#fff; }
+    .pill.active { background:#1c1c1a; color:#fff; border-color:#1c1c1a; }
+    .badge { display:inline-block; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:600; }
+    .type-select { padding:5px 8px; border-radius:6px; border:1px solid #d9d9d5; font-size:12.5px; background:#fff8ef; color:#1c1c1a; }
+    .switch { width:36px; height:20px; border-radius:10px; position:relative; cursor:pointer; transition:background 120ms; }
+    .switch-knob { position:absolute; top:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left 120ms; }
+    .icon-btn { cursor:pointer; display:inline-flex; }
+    .field-input { padding:9px 12px; border-radius:7px; border:1px solid #d9d9d5; font-size:13.5px; color:#1c1c1a; background:#fff; }
+  </style>
+</helmet>
+<div style="width:1200px; min-height:860px; background:#f5f5f4; color:#1c1c1a; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 32px; border-bottom:1px solid #e5e5e2; background:#fff;">
+    <div style="display:flex; align-items:center; gap:28px;">
+      <div style="font-size:16px; font-weight:700;">1r0 IPTV · Pannello Web</div>
+      <div style="display:flex; gap:22px;">
+        <div class="tab">Sorgenti</div>
+        <div class="tab active">Contenuti</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:28px 32px; display:flex; flex-direction:column; gap:18px;">
+    <div>
+      <div style="font-size:20px; font-weight:700;">Gestione contenuti</div>
+      <div style="font-size:13px; color:#8a8a84; margin-top:2px;">Canali, Film e Serie di tutte le Sorgenti. Nascondi voci indesiderate, gestisci i Preferiti e correggi la classificazione delle voci da M3U.</div>
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+      <div style="display:flex; gap:8px;">
+        <sc-for list="{{typeFilters}}" as="f" hint-placeholder-count="4">
+          <div class="pill {{f.activeClass}}" onClick="{{f.select}}">{{f.label}}</div>
+        </sc-for>
+      </div>
+      <input class="field-input" style="width:260px;" placeholder="Cerca per nome…" value="{{query}}" onInput="{{onQueryInput}}" />
+    </div>
+
+    <div style="background:#fff; border:1px solid #e5e5e2; border-radius:10px; overflow:hidden;">
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Sorgente</th><th>Categoria</th><th>Tipo</th><th>Nascosto</th><th>Preferito</th></tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{items}}" as="it" hint-placeholder-count="8">
+            <tr>
+              <td style="font-weight:600;">{{it.name}}</td>
+              <td style="color:#6b6b66;">{{it.source}}</td>
+              <td style="color:#6b6b66;">{{it.category}}</td>
+              <td>
+                <sc-if value="{{it.editableType}}" hint-placeholder-val="{{false}}">
+                  <select class="type-select" value="{{it.type}}" onChange="{{it.onTypeChange}}">
+                    <option value="canale">Canale</option>
+                    <option value="film">Film</option>
+                    <option value="serie">Serie</option>
+                  </select>
+                </sc-if>
+                <sc-if value="{{it.fixedType}}" hint-placeholder-val="{{true}}">
+                  <div class="badge" style="{{it.badgeStyle}}">{{it.typeLabel}}</div>
+                </sc-if>
+              </td>
+              <td>
+                <div class="switch" style="{{it.hiddenSwitchStyle}}" onClick="{{it.toggleHidden}}">
+                  <div class="switch-knob" style="{{it.hiddenKnobStyle}}"></div>
+                </div>
+              </td>
+              <td>
+                <div class="icon-btn" onClick="{{it.toggleFav}}">
+                  <sc-if value="{{it.favorite}}" hint-placeholder-val="{{false}}">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="#b45309" stroke="#b45309" stroke-width="1.5"><path d="M12 20s-7-4.35-9.3-8.8C1.2 8 3 5 6.2 5c1.8 0 3.1 1 3.8 2.1C10.7 6 12 5 13.8 5 17 5 18.8 8 17.3 11.2 15 15.65 12 20 12 20z"/></svg>
+                  </sc-if>
+                  <sc-if value="{{it.notFavorite}}" hint-placeholder-val="{{true}}">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8a8a84" stroke-width="1.5"><path d="M12 20s-7-4.35-9.3-8.8C1.2 8 3 5 6.2 5c1.8 0 3.1 1 3.8 2.1C10.7 6 12 5 13.8 5 17 5 18.8 8 17.3 11.2 15 15.65 12 20 12 20z"/></svg>
+                  </sc-if>
+                </div>
+              </td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script>
+const TYPE_META = {
+  canale: { label: 'Canale', style: 'background:#fee2e2;color:#991b1b;' },
+  film: { label: 'Film', style: 'background:#dbeafe;color:#1e40af;' },
+  serie: { label: 'Serie', style: 'background:#ede9fe;color:#5b21b6;' }
+};
+const INITIAL = [
+  { id: 'i1', name: 'Rai 1', source: 'Provider Principale (Xtream)', category: 'Generaliste', type: 'canale', editable: false, hidden: false, favorite: true },
+  { id: 'i2', name: 'Sky Sport', source: 'Provider Principale (Xtream)', category: 'Sport', type: 'canale', editable: false, hidden: false, favorite: true },
+  { id: 'i3', name: 'Canale Test 24', source: 'Playlist Backup (M3U)', category: 'Altro', type: 'canale', editable: true, hidden: true, favorite: false },
+  { id: 'i4', name: 'Dune: Parte Due', source: 'Provider Principale (Xtream)', category: 'Film', type: 'film', editable: false, hidden: false, favorite: false },
+  { id: 'i5', name: 'Film Azione HD 3', source: 'Playlist Backup (M3U)', category: 'Film Azione', type: 'film', editable: true, hidden: false, favorite: false },
+  { id: 'i6', name: 'The Bear', source: 'Provider Principale (Xtream)', category: 'Serie', type: 'serie', editable: false, hidden: false, favorite: true },
+  { id: 'i7', name: 'Serie Anime 12', source: 'Playlist Backup (M3U)', category: 'Serie', type: 'serie', editable: true, hidden: false, favorite: false },
+  { id: 'i8', name: 'Doc Natura HD', source: 'Playlist Backup (M3U)', category: 'Documentari', type: 'canale', editable: true, hidden: false, favorite: false }
+];
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { items: INITIAL, filterType: 'all', query: '' };
+  }
+  toggleHidden(id) {
+    this.setState({ items: this.state.items.map((i) => (i.id === id ? { ...i, hidden: !i.hidden } : i)) });
+  }
+  toggleFav(id) {
+    this.setState({ items: this.state.items.map((i) => (i.id === id ? { ...i, favorite: !i.favorite } : i)) });
+  }
+  changeType(id, value) {
+    this.setState({ items: this.state.items.map((i) => (i.id === id ? { ...i, type: value } : i)) });
+  }
+  renderVals() {
+    const filters = [
+      { key: 'all', label: 'Tutti' },
+      { key: 'canale', label: 'Canali' },
+      { key: 'film', label: 'Film' },
+      { key: 'serie', label: 'Serie' }
+    ];
+    const typeFilters = filters.map((f) => ({
+      label: f.label,
+      activeClass: this.state.filterType === f.key ? 'active' : '',
+      select: () => this.setState({ filterType: f.key })
+    }));
+    const q = this.state.query.trim().toLowerCase();
+    const items = this.state.items
+      .filter((i) => this.state.filterType === 'all' || i.type === this.state.filterType)
+      .filter((i) => !q || i.name.toLowerCase().includes(q))
+      .map((i) => {
+        const meta = TYPE_META[i.type];
+        return {
+          ...i,
+          editableType: i.editable,
+          fixedType: !i.editable,
+          typeLabel: meta.label,
+          badgeStyle: meta.style,
+          onTypeChange: (e) => this.changeType(i.id, e.target.value),
+          hiddenSwitchStyle: 'background:' + (i.hidden ? '#b45309' : '#d9d9d5') + ';',
+          hiddenKnobStyle: 'left:' + (i.hidden ? '18px' : '2px') + ';',
+          toggleHidden: () => this.toggleHidden(i.id),
+          notFavorite: !i.favorite,
+          toggleFav: () => this.toggleFav(i.id)
+        };
+      });
+    return { typeFilters, items, query: this.state.query, onQueryInput: (e) => this.setState({ query: e.target.value }) };
+  }
+}
+</script>
+</body>
+</html>

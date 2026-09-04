@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f5f5f4; }
+    a { color: #b45309; } a:hover { color: #92400e; }
+    table { width:100%; border-collapse: collapse; }
+    th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:#8a8a84; font-weight:600; padding:10px 14px; border-bottom:1px solid #e5e5e2; }
+    td { padding:14px; border-bottom:1px solid #eeeeeb; font-size:14px; color:#1c1c1a; vertical-align:middle; }
+    .btn { padding:8px 14px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .btn-primary { background:#b45309; color:#fff; }
+    .btn-ghost { background:#fff; color:#1c1c1a; border:1px solid #d9d9d5; }
+    .tab { padding:8px 4px; font-size:14px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; }
+    .tab.active { color:#b45309; border-bottom-color:#b45309; }
+    .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:20px; font-size:12px; font-weight:600; }
+  </style>
+</helmet>
+<div style="width:1200px; min-height:820px; background:#f5f5f4; color:#1c1c1a; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 32px; border-bottom:1px solid #e5e5e2; background:#fff;">
+    <div style="display:flex; align-items:center; gap:28px;">
+      <div style="font-size:16px; font-weight:700;">1r0 IPTV · Pannello Web</div>
+      <div style="display:flex; gap:22px;">
+        <div class="tab active">Sorgenti</div>
+        <div class="tab">Contenuti</div>
+      </div>
+    </div>
+    <div style="font-size:12px; color:#8a8a84; display:flex; align-items:center; gap:6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8a84" stroke-width="2"><path d="M5 12.5a11 11 0 0114 0M8.5 16a6 6 0 017 0M12 19.5h.01"/></svg>
+      Solo rete locale
+    </div>
+  </div>
+
+  <div style="padding:28px 32px; display:flex; flex-direction:column; gap:20px;">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <div style="font-size:20px; font-weight:700;">Sorgenti</div>
+        <div style="font-size:13px; color:#8a8a84; margin-top:2px;">Playlist M3U e account Xtream Codes configurati su questa Android TV</div>
+      </div>
+      <div class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        Aggiungi Sorgente
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #e5e5e2; border-radius:10px; overflow:hidden;">
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Tipo</th><th>Dettagli</th><th>Ultimo aggiornamento</th><th></th></tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{sources}}" as="src" hint-placeholder-count="3">
+            <tr>
+              <td style="font-weight:600;">{{src.name}}</td>
+              <td>{{src.type}}</td>
+              <td style="color:#6b6b66; font-family:ui-monospace, monospace; font-size:12.5px;">{{src.details}}</td>
+              <td>
+                <div class="badge" style="{{src.statusStyle}}">{{src.statusLabel}}</div>
+                <div style="font-size:11px; color:#8a8a84; margin-top:3px;">{{src.statusTime}}</div>
+              </td>
+              <td>
+                <div style="display:flex; gap:8px;">
+                  <div class="btn btn-ghost" onClick="{{src.refresh}}">Aggiorna ora</div>
+                  <div class="btn btn-ghost">Modifica</div>
+                  <div class="btn btn-ghost" style="color:#b91c1c;">Rimuovi</div>
+                </div>
+              </td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      sources: [
+        { id: 'src1', name: 'IPTV Provider Principale', type: 'Xtream Codes', details: 'host: iptv.provider.example:8080', status: 'ok', statusTime: 'oggi alle 20:12' },
+        { id: 'src2', name: 'Playlist Backup', type: 'M3U', details: 'https://esempio.tv/lista.m3u8', status: 'ok', statusTime: 'oggi alle 09:03' },
+        { id: 'src3', name: 'Provider Secondario', type: 'Xtream Codes', details: 'host: server2.example.net:25461', status: 'error', statusTime: 'ieri alle 18:47 · timeout' }
+      ]
+    };
+  }
+  statusVisual(status) {
+    if (status === 'ok') return { label: 'OK', style: 'background:#dcfce7;color:#166534;' };
+    if (status === 'refreshing') return { label: 'Aggiornamento…', style: 'background:#fef3c7;color:#92400e;' };
+    return { label: 'Errore', style: 'background:#fee2e2;color:#991b1b;' };
+  }
+  refresh(id) {
+    const sources = this.state.sources.map((s) => (s.id === id ? { ...s, status: 'refreshing' } : s));
+    this.setState({ sources });
+    setTimeout(() => {
+      const done = this.state.sources.map((s) => (s.id === id ? { ...s, status: 'ok', statusTime: 'adesso' } : s));
+      this.setState({ sources: done });
+    }, 1200);
+  }
+  renderVals() {
+    const sources = this.state.sources.map((s) => {
+      const v = this.statusVisual(s.status);
+      return { ...s, statusLabel: v.label, statusStyle: v.style, refresh: () => this.refresh(s.id) };
+    });
+    return { sources };
+  }
+}
+</script>
+</body>
+</html>
