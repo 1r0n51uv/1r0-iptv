@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "clerk-android": {
+      "source": "clerk/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mobile/clerk-android/SKILL.md",
+      "computedHash": "89bbd90683b00472ba781d293b34520a7891bf9ff3b7724bb9a5fbde8dce1ae9"
+    },
     "domain-modeling": {
       "source": "mattpocock/skills",
       "sourceType": "github",
