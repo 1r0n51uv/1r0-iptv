@@ -41,6 +41,7 @@ dependencies {
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
+    implementation(libs.zxing.core)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
