@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Home Redesign": {
+      "versions": [
+        {
+          "path": "Home Redesign.html",
+          "createdAt": "2026-09-04T22:52:07.421Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-04T22:52:07.422Z",
+  "updatedAt": "2026-09-04T22:52:07.422Z"
+}
