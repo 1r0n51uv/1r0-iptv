@@ -25,12 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.webpanel.WebPanelServer
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.SocketException
 import java.util.Collections
-
-private const val WEB_PANEL_PORT = 8080
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +53,7 @@ private fun localWebPanelAddress(): String? {
         .flatMap { Collections.list(it).asSequence() }
         .firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
         ?.hostAddress
-        ?.let { "http://$it:$WEB_PANEL_PORT" }
+        ?.let { "http://$it:${WebPanelServer.PORT}" }
 }
 
 @Composable

@@ -18,3 +18,4 @@ design/**/*.html
 
 # Gradle wrapper distribution cache stays local
 .gradle/
+.kotlin/
