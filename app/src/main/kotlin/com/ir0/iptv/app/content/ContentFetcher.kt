@@ -1,5 +1,7 @@
 package com.ir0.iptv.app.content
 
+import android.util.JsonReader
+import android.util.JsonToken
 import com.ir0.iptv.domain.classification.ContentClassifier
 import com.ir0.iptv.domain.classification.ContentType
 import com.ir0.iptv.domain.classification.SeriesGrouper
@@ -18,8 +20,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
+
+private const val CONNECT_TIMEOUT_MS = 10_000
+private const val READ_TIMEOUT_MS = 20_000
 
 class ContentFetcher(
     private val m3uParser: M3uParser = M3uParser(),
@@ -46,6 +50,15 @@ class ContentFetcher(
         )
     }
 
+    suspend fun dettaglioSerie(card: ContentCard.SerieCard.DaCaricare): com.ir0.iptv.domain.classification.Serie? =
+        withContext(Dispatchers.IO) {
+            tryOrNull {
+                val url = xtreamApiUrl(card.connection, "get_series_info") + "&series_id=${card.seriesId}"
+                val serieDto = JSONObject(scarica(url)).toSeriesInfoDto()
+                xtreamMapper.toSerie(serieDto, card.connection)
+            }
+        }
+
     private fun catalogoDaM3u(sorgente: Sorgente.M3u): ContentCatalog {
         val entries = m3uParser.parse(scarica(sorgente.url))
         val perTipo = entries.groupBy { contentClassifier.classify(it) }
@@ -53,7 +66,7 @@ class ContentFetcher(
         val canali = perTipo[ContentType.CANALE].orEmpty().map { it.toCanaleCard() }
         val film = perTipo[ContentType.FILM].orEmpty().map { it.toFilmCard() }
         val serie = seriesGrouper.group(perTipo[ContentType.SERIE].orEmpty())
-            .map { ContentCard.SerieCard(title = it.name, imageUrl = it.poster, serie = it) }
+            .map { ContentCard.SerieCard.Pronta(title = it.name, imageUrl = it.poster, serie = it) }
 
         return ContentCatalog(canali = canali, film = film, serie = serie)
     }
@@ -62,41 +75,60 @@ class ContentFetcher(
         val connection = sorgente.connection
 
         val canali = tryOrEmpty {
-            val array = JSONArray(scarica(xtreamApiUrl(connection, "get_live_streams")))
-            (0 until array.length()).map { i ->
-                xtreamMapper.toChannel(array.getJSONObject(i).toLiveStreamDto(), connection).toCanaleCard()
-            }
+            streamJsonArray(xtreamApiUrl(connection, "get_live_streams")) { readLiveStreamDto() }
+                .map { xtreamMapper.toChannel(it, connection).toCanaleCard() }
         }
 
         val film = tryOrEmpty {
-            val array = JSONArray(scarica(xtreamApiUrl(connection, "get_vod_streams")))
-            (0 until array.length()).map { i ->
-                val movie = xtreamMapper.toMovie(array.getJSONObject(i).toVodStreamDto(), connection)
-                ContentCard.Film(title = movie.title, imageUrl = movie.poster, streamUrl = movie.url)
-            }
+            streamJsonArray(xtreamApiUrl(connection, "get_vod_streams")) { readVodStreamDto() }
+                .map { dto ->
+                    val movie = xtreamMapper.toMovie(dto, connection)
+                    ContentCard.Film(title = movie.title, imageUrl = movie.poster, streamUrl = movie.url)
+                }
         }
 
         val serie = tryOrEmpty {
-            val array = JSONArray(scarica(xtreamApiUrl(connection, "get_series")))
-            (0 until array.length()).mapNotNull { i ->
-                val seriesId = array.getJSONObject(i).optInt("series_id", -1)
-                if (seriesId < 0) return@mapNotNull null
-                tryOrNull {
-                    val infoUrl = xtreamApiUrl(connection, "get_series_info") + "&series_id=$seriesId"
-                    val serieDto = JSONObject(scarica(infoUrl)).toSeriesInfoDto()
-                    val serieDomain = xtreamMapper.toSerie(serieDto, connection)
-                    ContentCard.SerieCard(title = serieDomain.name, imageUrl = serieDomain.poster, serie = serieDomain)
+            streamJsonArray(xtreamApiUrl(connection, "get_series")) { readSeriesListItem() }
+                .map { item ->
+                    ContentCard.SerieCard.DaCaricare(
+                        title = item.name,
+                        imageUrl = item.cover,
+                        seriesId = item.seriesId,
+                        connection = connection
+                    )
                 }
-            }
         }
 
         return ContentCatalog(canali = canali, film = film, serie = serie)
     }
 
+    /** Reads a large JSON array straight off the response stream, one object at a time, instead of
+     * materializing the whole (often tens of MB) response body as a String first - real Xtream
+     * catalogs are big enough that doing so risks an OutOfMemoryError on a TV's constrained heap. */
+    private fun <T> streamJsonArray(url: String, parseItem: JsonReader.() -> T): List<T> {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = CONNECT_TIMEOUT_MS
+        connection.readTimeout = READ_TIMEOUT_MS
+        return try {
+            JsonReader(InputStreamReader(connection.inputStream, Charsets.UTF_8)).use { reader ->
+                reader.isLenient = true
+                val results = mutableListOf<T>()
+                reader.beginArray()
+                while (reader.hasNext()) {
+                    results += reader.parseItem()
+                }
+                reader.endArray()
+                results
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun scarica(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
+        connection.connectTimeout = CONNECT_TIMEOUT_MS
+        connection.readTimeout = READ_TIMEOUT_MS
         return try {
             BufferedReader(InputStreamReader(connection.inputStream)).use { it.readText() }
         } finally {
@@ -125,22 +157,89 @@ private fun xtreamApiUrl(connection: XtreamConnection, action: String): String =
     "http://${connection.host}:${connection.port}/player_api.php" +
         "?username=${connection.username}&password=${connection.password}&action=$action"
 
-private fun JSONObject.toLiveStreamDto(): XtreamLiveStreamDto = XtreamLiveStreamDto(
-    name = getString("name"),
-    streamId = getInt("stream_id"),
-    streamIcon = optStringOrNull("stream_icon"),
-    epgChannelId = optStringOrNull("epg_channel_id"),
-    categoryName = optStringOrNull("category_name")
-)
+private data class SeriesListItem(val seriesId: Int, val name: String, val cover: String?)
 
-private fun JSONObject.toVodStreamDto(): XtreamVodStreamDto = XtreamVodStreamDto(
-    name = getString("name"),
-    streamId = getInt("stream_id"),
-    streamIcon = optStringOrNull("stream_icon"),
-    plot = optStringOrNull("plot"),
-    categoryName = optStringOrNull("category_name"),
-    containerExtension = optStringOrNull("container_extension") ?: "mp4"
-)
+private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
+    var name = ""
+    var streamId = 0
+    var streamIcon: String? = null
+    var epgChannelId: String? = null
+    var categoryName: String? = null
+    beginObject()
+    while (hasNext()) {
+        when (nextName()) {
+            "name" -> name = nextStringFlexible()
+            "stream_id" -> streamId = nextIntFlexible()
+            "stream_icon" -> streamIcon = nextStringOrNull()
+            "epg_channel_id" -> epgChannelId = nextStringOrNull()
+            "category_name" -> categoryName = nextStringOrNull()
+            else -> skipValue()
+        }
+    }
+    endObject()
+    return XtreamLiveStreamDto(name, streamId, streamIcon, epgChannelId, categoryName)
+}
+
+private fun JsonReader.readVodStreamDto(): XtreamVodStreamDto {
+    var name = ""
+    var streamId = 0
+    var streamIcon: String? = null
+    var plot: String? = null
+    var categoryName: String? = null
+    var containerExtension = "mp4"
+    beginObject()
+    while (hasNext()) {
+        when (nextName()) {
+            "name" -> name = nextStringFlexible()
+            "stream_id" -> streamId = nextIntFlexible()
+            "stream_icon" -> streamIcon = nextStringOrNull()
+            "plot" -> plot = nextStringOrNull()
+            "category_name" -> categoryName = nextStringOrNull()
+            "container_extension" -> containerExtension = nextStringOrNull() ?: "mp4"
+            else -> skipValue()
+        }
+    }
+    endObject()
+    return XtreamVodStreamDto(name, streamId, streamIcon, plot, categoryName, containerExtension)
+}
+
+private fun JsonReader.readSeriesListItem(): SeriesListItem {
+    var seriesId = -1
+    var name = ""
+    var cover: String? = null
+    beginObject()
+    while (hasNext()) {
+        when (nextName()) {
+            "series_id" -> seriesId = nextIntFlexible()
+            "name" -> name = nextStringFlexible()
+            "cover" -> cover = nextStringOrNull()
+            else -> skipValue()
+        }
+    }
+    endObject()
+    return SeriesListItem(seriesId, name, cover)
+}
+
+private fun JsonReader.nextStringOrNull(): String? = when (peek()) {
+    JsonToken.NULL -> {
+        nextNull()
+        null
+    }
+
+    else -> nextString()
+}
+
+private fun JsonReader.nextStringFlexible(): String = nextStringOrNull().orEmpty()
+
+private fun JsonReader.nextIntFlexible(): Int = when (peek()) {
+    JsonToken.NULL -> {
+        nextNull()
+        0
+    }
+
+    JsonToken.STRING -> nextString().toIntOrNull() ?: 0
+    else -> nextInt()
+}
 
 private fun JSONObject.toSeriesInfoDto(): XtreamSeriesInfoDto {
     val info = optJSONObject("info")

@@ -97,11 +97,11 @@ private fun ContentScreen(sorgenti: List<Sorgente>) {
             catalogo = catalogoCorrente,
             onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
             onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
-            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it.serie) }
+            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
         )
 
         is Screen.SeriesDetail -> SeriesDetailScreen(
-            serie = schermata.serie,
+            card = schermata.card,
             onEpisodioClick = { episodio -> backStack = backStack + Screen.Player(episodio.title, episodio.url) }
         )
 
