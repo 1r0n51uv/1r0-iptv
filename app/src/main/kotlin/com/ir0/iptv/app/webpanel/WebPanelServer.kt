@@ -1,6 +1,9 @@
 package com.ir0.iptv.app.webpanel
 
 import android.content.Context
+import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.RicercaCatalogo
 import com.ir0.iptv.domain.source.Sorgente
 import com.ir0.iptv.domain.source.SorgenteFactory
 import io.ktor.http.ContentType
@@ -67,6 +70,30 @@ object WebPanelServer {
                 post("/sorgenti/{id}/elimina") {
                     repository.rimuovi(call.parameters["id"].orEmpty())
                     call.respondRedirect("/")
+                }
+                get("/riproduci") {
+                    val query = call.request.queryParameters["q"].orEmpty()
+                    call.respondText(
+                        riproduciPage(PonteTv.catalogo.value, query),
+                        ContentType.Text.Html
+                    )
+                }
+                post("/riproduci") {
+                    val params = call.receiveParameters()
+                    val trovato = PonteTv.chiediApertura(params["chiave"].orEmpty())
+                    val query = params["q"].orEmpty()
+                    call.respondText(
+                        riproduciPage(
+                            catalogo = PonteTv.catalogo.value,
+                            query = query,
+                            esito = if (trovato) {
+                                "Aperto sulla TV."
+                            } else {
+                                "Contenuto non più nel catalogo caricato sulla TV."
+                            }
+                        ),
+                        ContentType.Text.Html
+                    )
                 }
             }
         }.start(wait = false)
@@ -208,10 +235,72 @@ private fun sourcesPage(sorgenti: List<Sorgente>): String {
             <div style="font-size: 20px; font-weight: 700;">Sorgenti</div>
             <div style="font-size: 13px; color: #6b6b66;">Playlist M3U e account Xtream Codes configurati su questa Android TV</div>
           </div>
-          <a class="btn btn-primary" href="/sorgenti/nuova">+ Aggiungi Sorgente</a>
+          <div class="actions">
+            <a class="btn btn-ghost" href="/riproduci">Riproduci sulla TV</a>
+            <a class="btn btn-primary" href="/sorgenti/nuova">+ Aggiungi Sorgente</a>
+          </div>
         </div>
         <table>
           <thead><tr><th>Nome</th><th>Tipo</th><th>Dettagli</th><th></th></tr></thead>
+          <tbody>$righe</tbody>
+        </table>
+        """.trimIndent()
+    )
+}
+
+private const val MAX_RISULTATI_RIPRODUCI = 100
+
+private fun riproduciPage(catalogo: ContentCatalog, query: String, esito: String? = null): String {
+    val risultati = if (query.isBlank()) {
+        catalogo.tutti.take(MAX_RISULTATI_RIPRODUCI)
+    } else {
+        RicercaCatalogo().cerca(catalogo, query).take(MAX_RISULTATI_RIPRODUCI)
+    }
+    val esitoHtml = esito?.let { """<div class="error" style="background:#ecfdf5;color:#065f46;">${it.escapeHtml()}</div>""" }.orEmpty()
+    val righe = if (catalogo.tutti.isEmpty()) {
+        """<tr><td style="justify-content: center;">La TV non ha ancora caricato il catalogo</td></tr>"""
+    } else if (risultati.isEmpty()) {
+        """<tr><td style="justify-content: center;">Nessun risultato</td></tr>"""
+    } else {
+        risultati.joinToString(separator = "") { card ->
+            val tipo = when (card) {
+                is ContentCard.Canale -> "Canale"
+                is ContentCard.Film -> "Film"
+                is ContentCard.SerieCard -> "Serie"
+            }
+            """
+            <tr>
+              <td data-label="Titolo" style="font-weight: 600;">${card.title.escapeHtml()}</td>
+              <td data-label="Tipo">$tipo</td>
+              <td data-label="Azioni">
+                <div class="actions">
+                  <form method="post" action="/riproduci">
+                    <input type="hidden" name="chiave" value="${card.chiaveIdentita.escapeHtml()}">
+                    <input type="hidden" name="q" value="${query.escapeHtml()}">
+                    <button class="btn btn-primary" type="submit">Riproduci sulla TV</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            """.trimIndent()
+        }
+    }
+    return pageShell(
+        """
+        <div class="list-header">
+          <div>
+            <div style="font-size: 20px; font-weight: 700;">Riproduci sulla TV</div>
+            <div style="font-size: 13px; color: #6b6b66;">Scegli un contenuto: la TV lo apre subito</div>
+          </div>
+          <a class="btn btn-ghost" href="/">Sorgenti</a>
+        </div>
+        $esitoHtml
+        <form method="get" action="/riproduci" style="margin-bottom: 16px;">
+          <input class="field-input" name="q" placeholder="Cerca fra Canali, Film e Serie" value="${query.escapeHtml()}" style="margin-bottom: 8px;">
+          <button class="btn btn-ghost" type="submit">Cerca</button>
+        </form>
+        <table>
+          <thead><tr><th>Titolo</th><th>Tipo</th><th></th></tr></thead>
           <tbody>$righe</tbody>
         </table>
         """.trimIndent()
