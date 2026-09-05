@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ import com.ir0.iptv.app.session.StatoSessioneRepository
 import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.app.sport.SportInEvidenza
 import com.ir0.iptv.app.settings.ImpostazioniRepository
+import com.ir0.iptv.app.webpanel.PonteTv
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
@@ -193,6 +195,15 @@ private fun ContentScreen(
         sovrapposte = sovrapposte + when (card) {
             is ContentCard.Canale -> Screen.Player(card.toRichiesta(), 0L)
             else -> Screen.Detail(card)
+        }
+    }
+
+    LaunchedEffect(catalogoCorrente) { PonteTv.pubblicaCatalogo(catalogoCorrente) }
+    val richiestoDalWeb by PonteTv.daAprire.collectAsState()
+    LaunchedEffect(richiestoDalWeb) {
+        richiestoDalWeb?.let {
+            apri(it)
+            PonteTv.aperturaConsumata()
         }
     }
 
