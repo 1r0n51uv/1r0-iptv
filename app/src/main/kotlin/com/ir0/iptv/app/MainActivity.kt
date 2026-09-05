@@ -48,6 +48,8 @@ import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.session.StatoSessioneRepository
+import com.ir0.iptv.app.sport.PartitaConCanale
+import com.ir0.iptv.app.sport.SportInEvidenza
 import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
@@ -85,6 +87,7 @@ class MainActivity : ComponentActivity() {
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
         val suggerimentiAi = SuggerimentiAi()
+        val sportInEvidenza = SportInEvidenza()
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -104,7 +107,8 @@ class MainActivity : ComponentActivity() {
                     statoSessioneRepository = statoSessioneRepository,
                     impostazioniRepository = impostazioniRepository,
                     nuoviEpisodi = nuoviEpisodi,
-                    suggerimentiAi = suggerimentiAi
+                    suggerimentiAi = suggerimentiAi,
+                    sportInEvidenza = sportInEvidenza
                 )
             }
         }
@@ -119,7 +123,8 @@ private fun ContentScreen(
     statoSessioneRepository: StatoSessioneRepository,
     impostazioniRepository: ImpostazioniRepository,
     nuoviEpisodi: NuoviEpisodi,
-    suggerimentiAi: SuggerimentiAi
+    suggerimentiAi: SuggerimentiAi,
+    sportInEvidenza: SportInEvidenza
 ) {
     val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
@@ -146,13 +151,20 @@ private fun ContentScreen(
     }
     var rigaNuoviEpisodi by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
     var rigaSuggeriti by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
+    var partiteInEvidenza by remember(catalogoCorrente) { mutableStateOf(emptyList<PartitaConCanale>()) }
     LaunchedEffect(catalogoCorrente) {
+        val impostazioni = impostazioniRepository.leggi()
         rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
         rigaSuggeriti = suggerimentiAi.riga(
-            chiaveApi = impostazioniRepository.leggi().chiaveApiAi,
+            chiaveApi = impostazioni.chiaveApiAi,
             catalogo = catalogoCorrente,
             visti = visti,
             personalizzazioni = personalizzazioni
+        )
+        partiteInEvidenza = sportInEvidenza.partite(
+            attivo = impostazioni.sportInDashboard,
+            chiaveApi = impostazioni.chiaveApiSport,
+            canali = catalogoCorrente.canali
         )
     }
 
@@ -227,6 +239,7 @@ private fun ContentScreen(
                         righe = righe,
                         visti = visti,
                         chiaveDaFocalizzare = chiaveDaFocalizzare,
+                        sport = partiteInEvidenza,
                                 onContenutoClick = { apri(it) },
                         onContenutoLongClick = { riproduciConDaCard(context, it) }
                     )

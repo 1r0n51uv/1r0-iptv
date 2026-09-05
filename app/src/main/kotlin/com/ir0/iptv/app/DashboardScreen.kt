@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.dashboard.TipoRiga
@@ -33,10 +34,11 @@ fun DashboardScreen(
     righe: List<RigaDashboard>,
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
+    sport: List<PartitaConCanale> = emptyList(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
-    if (righe.isEmpty()) {
+    if (righe.isEmpty() && sport.isEmpty()) {
         SchermataVuota("Nessun contenuto trovato nelle Sorgenti configurate.")
         return
     }
@@ -63,6 +65,11 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
+        if (sport.isNotEmpty()) {
+            item {
+                FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
+            }
+        }
         items(righe) { riga ->
             RigaContenuti(
                 titolo = titoloDi(riga.tipo),
