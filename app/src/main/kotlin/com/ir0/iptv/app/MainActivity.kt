@@ -66,6 +66,7 @@ import com.ir0.iptv.domain.catalog.ElencoPreferiti
 import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
 import com.ir0.iptv.domain.dashboard.MemoriaFocus
 import com.ir0.iptv.domain.dashboard.RigaDashboard
+import com.ir0.iptv.domain.dashboard.TipoRiga
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -163,17 +164,22 @@ private fun ContentScreen(
     val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente) {
         personalizzazioneRepository.elenco()
     }
-    var rigaNuoviEpisodi by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
-    var rigaSuggeriti by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
+    var rigaNuoviEpisodi by remember(catalogoCorrente) {
+        mutableStateOf(RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList()))
+    }
+    var rigaSuggeriti by remember(catalogoCorrente) {
+        mutableStateOf(RigaDashboard(TipoRiga.SUGGERITI, emptyList()))
+    }
     var partiteInEvidenza by remember(catalogoCorrente) { mutableStateOf(emptyList<PartitaConCanale>()) }
     LaunchedEffect(catalogoCorrente) {
         rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
+            ?: RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList())
         rigaSuggeriti = suggerimentiAi.riga(
             chiaveApi = impostazioni.chiaveApiAi,
             catalogo = catalogoCorrente,
             visti = visti,
             personalizzazioni = personalizzazioni
-        )
+        ) ?: RigaDashboard(TipoRiga.SUGGERITI, emptyList())
         partiteInEvidenza = sportInEvidenza.partite(
             attivo = impostazioni.sportInDashboard,
             chiaveApi = impostazioni.chiaveApiSport,
@@ -187,7 +193,7 @@ private fun ContentScreen(
             catalogo = catalogoCorrente,
             visti = visti,
             personalizzazioni = personalizzazioni,
-            righeExtra = listOfNotNull(rigaNuoviEpisodi, rigaSuggeriti)
+            righeExtra = listOf(rigaNuoviEpisodi, rigaSuggeriti)
         )
     }
 
@@ -265,6 +271,7 @@ private fun ContentScreen(
                             righe = righe,
                             visti = visti,
                             chiaveDaFocalizzare = chiaveDaFocalizzare,
+                            catalogoVuoto = catalogoCorrente.isEmpty,
                             sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }

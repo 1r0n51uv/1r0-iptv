@@ -69,7 +69,7 @@ fun ImpostazioniScreen(
         Sezione("Suggerimenti AI") {
             Nota(
                 if (impostazioni.chiaveApiAi.isNullOrBlank()) {
-                    "Nessuna chiave configurata: la riga Suggeriti resta nascosta."
+                    "Nessuna chiave configurata: la riga Suggeriti resta vuota."
                 } else {
                     "Chiave configurata."
                 }

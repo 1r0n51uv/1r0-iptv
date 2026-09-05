@@ -14,9 +14,9 @@ class MemoriaFocusTest {
     private val dune = ContentCard.Film("Dune", null, "http://example.com/dune.mp4")
     private val simpson = ContentCard.SerieCard.Pronta("I Simpson", null, Serie("I Simpson", emptyList()))
     private val righe = listOf(
-        RigaDashboard(TipoRiga.CANALI, listOf(rai1)),
-        RigaDashboard(TipoRiga.FILM, listOf(dune)),
-        RigaDashboard(TipoRiga.SERIE, listOf(simpson))
+        RigaDashboard(TipoRiga.CONTINUA, listOf(rai1)),
+        RigaDashboard(TipoRiga.NUOVI_EPISODI, listOf(dune)),
+        RigaDashboard(TipoRiga.PREFERITI, listOf(simpson))
     )
 
     @Test

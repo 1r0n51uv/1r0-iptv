@@ -20,15 +20,18 @@ class CostruttoreDashboardTest {
     private val catalogo = ContentCatalog(canali = listOf(rai1), film = listOf(dune), serie = listOf(bear))
 
     @Test
-    fun `an empty catalog produces no rows at all`() {
-        assertTrue(costruttore.costruisci(ContentCatalog(), emptyList(), emptyMap()).isEmpty())
+    fun `an empty catalog still produces the curated rows, all empty`() {
+        val righe = costruttore.costruisci(ContentCatalog(), emptyList(), emptyMap())
+
+        assertEquals(listOf(TipoRiga.CONTINUA, TipoRiga.PREFERITI), righe.map { it.tipo })
+        assertTrue(righe.all { it.contenuti.isEmpty() })
     }
 
     @Test
-    fun `rows come in a fixed order and empty ones are left out`() {
+    fun `rows come in a fixed order even when everything is empty`() {
         val righe = costruttore.costruisci(catalogo, emptyList(), emptyMap())
 
-        assertEquals(listOf(TipoRiga.CANALI, TipoRiga.FILM, TipoRiga.SERIE), righe.map { it.tipo })
+        assertEquals(listOf(TipoRiga.CONTINUA, TipoRiga.PREFERITI), righe.map { it.tipo })
     }
 
     @Test
@@ -58,13 +61,13 @@ class CostruttoreDashboardTest {
 
         val righe = costruttore.costruisci(catalogo, visti, emptyMap())
 
-        assertTrue(righe.none { it.tipo == TipoRiga.CONTINUA })
+        assertTrue(righe.first { it.tipo == TipoRiga.CONTINUA }.contenuti.isEmpty())
     }
 
     @Test
-    fun `the Preferiti row shows up only once something is a Preferito`() {
+    fun `the Preferiti row only has content once something is a Preferito`() {
         val senza = costruttore.costruisci(catalogo, emptyList(), emptyMap())
-        assertTrue(senza.none { it.tipo == TipoRiga.PREFERITI })
+        assertTrue(senza.first { it.tipo == TipoRiga.PREFERITI }.contenuti.isEmpty())
 
         val con = costruttore.costruisci(
             catalogo,
@@ -86,20 +89,6 @@ class CostruttoreDashboardTest {
 
         assertEquals(
             listOf(TipoRiga.CONTINUA, TipoRiga.NUOVI_EPISODI, TipoRiga.PREFERITI),
-            righe.map { it.tipo }.take(3)
-        )
-    }
-
-    @Test
-    fun `continue watching comes before Preferiti, which comes before the catalog rows`() {
-        val righe = costruttore.costruisci(
-            catalogo,
-            listOf(visto(dune.chiaveIdentita, TipoVisto.FILM)),
-            mapOf(rai1.chiaveIdentita to ContentCustomization(favorite = true))
-        )
-
-        assertEquals(
-            listOf(TipoRiga.CONTINUA, TipoRiga.PREFERITI, TipoRiga.CANALI, TipoRiga.FILM, TipoRiga.SERIE),
             righe.map { it.tipo }
         )
     }

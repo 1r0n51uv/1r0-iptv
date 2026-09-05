@@ -38,9 +38,17 @@ fun FasciaSport(partite: List<PartitaConCanale>, onCanaleClick: (ContentCard) ->
             fontSize = 19.sp,
             fontWeight = FontWeight.SemiBold
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            partite.forEach { conCanale ->
-                CardPartita(conCanale = conCanale, onClick = { onCanaleClick(it) })
+        if (partite.isEmpty()) {
+            Text(
+                text = "Nessun evento in diretta al momento. Attiva la chiave API sport dalle Impostazioni.",
+                color = Color(0xFF6D7380),
+                fontSize = 14.sp
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                partite.forEach { conCanale ->
+                    CardPartita(conCanale = conCanale, onClick = { onCanaleClick(it) })
+                }
             }
         }
     }

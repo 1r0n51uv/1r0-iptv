@@ -29,16 +29,19 @@ import com.ir0.iptv.domain.playback.Visto
 
 private val registroVisti = RegistroVisti()
 
+/** Le righe curate compaiono sempre, anche vuote: la Dashboard deve far capire cosa puo'
+ * mostrare, non solo cosa mostra in questo momento. */
 @Composable
 fun DashboardScreen(
     righe: List<RigaDashboard>,
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
+    catalogoVuoto: Boolean,
     sport: List<PartitaConCanale> = emptyList(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
-    if (righe.isEmpty() && sport.isEmpty()) {
+    if (catalogoVuoto) {
         SchermataVuota("Nessun contenuto trovato nelle Sorgenti configurate.")
         return
     }
@@ -51,7 +54,8 @@ fun DashboardScreen(
 
     LaunchedEffect(chiaveDaFocalizzare, righe) {
         if (indiceRigaDaFocalizzare >= 0) {
-            statoColonna.scrollToItem(indiceRigaDaFocalizzare)
+            // +1: la fascia sport occupa il primo posto nella LazyColumn.
+            statoColonna.scrollToItem(indiceRigaDaFocalizzare + 1)
             // La card puo' non essere ancora attaccata: in quel caso resta il focus di default.
             runCatching { focusRequester.requestFocus() }
         }
@@ -65,10 +69,8 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-        if (sport.isNotEmpty()) {
-            item {
-                FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
-            }
+        item {
+            FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
         }
         items(righe) { riga ->
             RigaContenuti(
@@ -78,7 +80,8 @@ fun DashboardScreen(
                 chiaveDaFocalizzare = chiaveDaFocalizzare,
                 focusRequester = focusRequester,
                 onClick = onContenutoClick,
-                onLongClick = onContenutoLongClick
+                onLongClick = onContenutoLongClick,
+                messaggioVuoto = messaggioVuotoDi(riga.tipo)
             )
         }
     }
@@ -92,9 +95,32 @@ fun RigaContenuti(
     chiaveDaFocalizzare: String?,
     focusRequester: FocusRequester?,
     onClick: (ContentCard) -> Unit,
-    onLongClick: (ContentCard) -> Unit = {}
+    onLongClick: (ContentCard) -> Unit = {},
+    /** Quando non null, la riga resta visibile (con questo messaggio) anche a contenuti vuoti;
+     * quando null, una riga vuota semplicemente non compare (comportamento delle righe di
+     * catalogo su Sfoglia/Cerca/Sport, dove una sezione vuota non aggiunge nulla da leggere). */
+    messaggioVuoto: String? = null
 ) {
-    if (contenuti.isEmpty()) return
+    if (contenuti.isEmpty()) {
+        if (messaggioVuoto == null) return
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = titolo,
+                color = Color(0xFFF2F2F0),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+            Text(
+                text = messaggioVuoto,
+                color = Color(0xFF6D7380),
+                fontSize = 14.sp,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+        }
+        return
+    }
+
     val statoRiga = rememberLazyListState()
     val indiceDaFocalizzare = contenuti.indexOfFirst { it.chiaveIdentita == chiaveDaFocalizzare }
 
@@ -144,9 +170,13 @@ private fun titoloDi(tipo: TipoRiga): String = when (tipo) {
     TipoRiga.CONTINUA -> "Continua a guardare"
     TipoRiga.NUOVI_EPISODI -> "Nuovi episodi"
     TipoRiga.SUGGERITI -> "Suggeriti"
-    TipoRiga.SPORT -> "Sport in diretta"
     TipoRiga.PREFERITI -> "Preferiti"
-    TipoRiga.CANALI -> "Canali"
-    TipoRiga.FILM -> "Film"
-    TipoRiga.SERIE -> "Serie"
+}
+
+private fun messaggioVuotoDi(tipo: TipoRiga): String = when (tipo) {
+    TipoRiga.CONTINUA -> "Quello che guardi appare qui, per riprendere da dove avevi lasciato."
+    TipoRiga.NUOVI_EPISODI ->
+        "Segui una Serie (guardala o aggiungila ai Preferiti) per vedere qui i nuovi episodi."
+    TipoRiga.SUGGERITI -> "Aggiungi la chiave API di Claude dalle Impostazioni per ricevere suggerimenti."
+    TipoRiga.PREFERITI -> "Nessun Preferito ancora: aggiungine uno dalla sua pagina di Dettaglio."
 }
