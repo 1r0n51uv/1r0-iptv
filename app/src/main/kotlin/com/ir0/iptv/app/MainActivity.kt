@@ -41,6 +41,7 @@ import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.dashboard.NuoviEpisodi
 import com.ir0.iptv.app.dashboard.NuoviEpisodiRepository
+import com.ir0.iptv.app.dashboard.SuggerimentiAi
 import com.ir0.iptv.app.navigation.Destinazione
 import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
         val statoSessioneRepository = StatoSessioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
+        val suggerimentiAi = SuggerimentiAi()
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -101,7 +103,8 @@ class MainActivity : ComponentActivity() {
                     personalizzazioneRepository = personalizzazioneRepository,
                     statoSessioneRepository = statoSessioneRepository,
                     impostazioniRepository = impostazioniRepository,
-                    nuoviEpisodi = nuoviEpisodi
+                    nuoviEpisodi = nuoviEpisodi,
+                    suggerimentiAi = suggerimentiAi
                 )
             }
         }
@@ -115,7 +118,8 @@ private fun ContentScreen(
     personalizzazioneRepository: PersonalizzazioneRepository,
     statoSessioneRepository: StatoSessioneRepository,
     impostazioniRepository: ImpostazioniRepository,
-    nuoviEpisodi: NuoviEpisodi
+    nuoviEpisodi: NuoviEpisodi,
+    suggerimentiAi: SuggerimentiAi
 ) {
     val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
@@ -141,16 +145,23 @@ private fun ContentScreen(
         personalizzazioneRepository.elenco()
     }
     var rigaNuoviEpisodi by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
+    var rigaSuggeriti by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
     LaunchedEffect(catalogoCorrente) {
         rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
+        rigaSuggeriti = suggerimentiAi.riga(
+            chiaveApi = impostazioniRepository.leggi().chiaveApiAi,
+            catalogo = catalogoCorrente,
+            visti = visti,
+            personalizzazioni = personalizzazioni
+        )
     }
 
-    val righe = remember(catalogoCorrente, visti, personalizzazioni, rigaNuoviEpisodi) {
+    val righe = remember(catalogoCorrente, visti, personalizzazioni, rigaNuoviEpisodi, rigaSuggeriti) {
         costruttoreDashboard.costruisci(
             catalogo = catalogoCorrente,
             visti = visti,
             personalizzazioni = personalizzazioni,
-            righeExtra = listOfNotNull(rigaNuoviEpisodi)
+            righeExtra = listOfNotNull(rigaNuoviEpisodi, rigaSuggeriti)
         )
     }
 
