@@ -35,11 +35,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.content.ContentCard
 import com.ir0.iptv.app.content.ContentCatalog
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.playback.RichiestaRiproduzione
+import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
+import com.ir0.iptv.domain.classification.Episodio
+import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -57,6 +62,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
+        val vistoRepository = VistoRepository(applicationContext)
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -70,14 +76,18 @@ class MainActivity : ComponentActivity() {
             if (sorgenti.isEmpty()) {
                 OnboardingScreen(webPanelAddress = webPanelAddress)
             } else {
-                ContentScreen(sorgenti, webPanelAddress)
+                ContentScreen(sorgenti, webPanelAddress, vistoRepository)
             }
         }
     }
 }
 
 @Composable
-private fun ContentScreen(sorgenti: List<Sorgente>, webPanelAddress: String?) {
+private fun ContentScreen(
+    sorgenti: List<Sorgente>,
+    webPanelAddress: String?,
+    vistoRepository: VistoRepository
+) {
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     LaunchedEffect(sorgenti) {
         catalogo = ContentFetcher().catalogo(sorgenti)
@@ -100,8 +110,8 @@ private fun ContentScreen(sorgenti: List<Sorgente>, webPanelAddress: String?) {
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
-            onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
+            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta()) },
+            onFilmClick = { backStack = backStack + Screen.Player(it.toRichiesta()) },
             onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
         )
 
@@ -109,14 +119,14 @@ private fun ContentScreen(sorgenti: List<Sorgente>, webPanelAddress: String?) {
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) }
+            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta()) }
         )
 
         is Screen.Film -> FilmScreen(
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) }
+            onFilmClick = { backStack = backStack + Screen.Player(it.toRichiesta()) }
         )
 
         is Screen.Serie -> SerieScreen(
@@ -140,12 +150,43 @@ private fun ContentScreen(sorgenti: List<Sorgente>, webPanelAddress: String?) {
 
         is Screen.SeriesDetail -> SeriesDetailScreen(
             card = schermata.card,
-            onEpisodioClick = { episodio -> backStack = backStack + Screen.Player(episodio.title, episodio.url) }
+            onEpisodioClick = { episodio ->
+                backStack = backStack + Screen.Player(episodio.toRichiesta(schermata.card))
+            }
         )
 
-        is Screen.Player -> PlayerScreen(title = schermata.title, streamUrl = schermata.streamUrl)
+        is Screen.Player -> {
+            val richiesta = schermata.richiesta
+            PlayerScreen(
+                richiesta = richiesta,
+                posizioneIniziale = remember(richiesta) {
+                    vistoRepository.posizioneDiRipresa(richiesta.chiaveIdentita) ?: 0L
+                },
+                onProgresso = { posizioneMs, durataMs ->
+                    vistoRepository.registraProgresso(richiesta, posizioneMs, durataMs)
+                }
+            )
+        }
     }
 }
+
+private fun ContentCard.Canale.toRichiesta() =
+    RichiestaRiproduzione(titolo = title, streamUrl = streamUrl, posterUrl = imageUrl)
+
+private fun ContentCard.Film.toRichiesta() = RichiestaRiproduzione(
+    titolo = title,
+    streamUrl = streamUrl,
+    tipo = TipoVisto.FILM,
+    posterUrl = imageUrl
+)
+
+private fun Episodio.toRichiesta(serie: ContentCard.SerieCard) = RichiestaRiproduzione(
+    titolo = title,
+    streamUrl = url,
+    tipo = TipoVisto.EPISODIO,
+    serie = serie.title,
+    posterUrl = serie.imageUrl
+)
 
 private fun localWebPanelAddress(): String? {
     val interfaces = try {

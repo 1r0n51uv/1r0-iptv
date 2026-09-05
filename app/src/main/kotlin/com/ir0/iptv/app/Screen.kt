@@ -1,6 +1,7 @@
 package com.ir0.iptv.app
 
 import com.ir0.iptv.app.content.ContentCard
+import com.ir0.iptv.app.playback.RichiestaRiproduzione
 
 sealed interface Screen {
     data object Home : Screen
@@ -10,7 +11,7 @@ sealed interface Screen {
     data object Preferiti : Screen
     data object Impostazioni : Screen
     data class SeriesDetail(val card: ContentCard.SerieCard) : Screen
-    data class Player(val title: String, val streamUrl: String) : Screen
+    data class Player(val richiesta: RichiestaRiproduzione) : Screen
 }
 
 /** Maps a [Sidebar] icon index (0-4 top icons, 5 = pinned Impostazioni) to its destination. */

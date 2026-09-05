@@ -27,6 +27,19 @@ class RegistroVistiTest {
     }
 
     @Test
+    fun `only the most recent entries are kept, so the registry cannot grow forever`() {
+        val pieno = (1..MAX_VISTI).fold(emptyList<Visto>()) { visti, i ->
+            registro.registra(visti, film(chiave = "film-$i"))
+        }
+
+        val conNuovo = registro.registra(pieno, film(chiave = "film-nuovo"))
+
+        assertEquals(MAX_VISTI, conNuovo.size)
+        assertEquals("film-nuovo", conNuovo.first().chiaveIdentita)
+        assertTrue(conNuovo.none { it.chiaveIdentita == "film-1" })
+    }
+
+    @Test
     fun `there is no resume position for a content never opened`() {
         assertNull(registro.posizioneDiRipresa(emptyList(), "mai-aperto"))
     }
