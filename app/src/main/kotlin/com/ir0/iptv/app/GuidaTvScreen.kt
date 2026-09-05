@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
@@ -98,7 +99,7 @@ private fun VoceCanale(
     var infocato by remember { mutableStateOf(false) }
     Text(
         text = canale.title,
-        color = if (attivo) Color(0xFFFFB454) else Color(0xFFC7CAD0),
+        color = if (attivo) LocalAccento.current else Color(0xFFC7CAD0),
         fontSize = 15.sp,
         fontWeight = if (attivo) FontWeight.SemiBold else FontWeight.Normal,
         maxLines = 1,
@@ -164,7 +165,7 @@ private fun VoceProgramma(programma: Programma, inOnda: Boolean, percentuale: In
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = oraDelGiorno.format(Date(programma.inizioMs)),
-                color = if (inOnda) Color(0xFFFFB454) else Color(0xFF6D7380),
+                color = if (inOnda) LocalAccento.current else Color(0xFF6D7380),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -189,7 +190,7 @@ private fun VoceProgramma(programma: Programma, inOnda: Boolean, percentuale: In
                     modifier = Modifier
                         .fillMaxWidth(percentuale / 100f)
                         .fillMaxHeight()
-                        .background(Color(0xFFFFB454))
+                        .background(LocalAccento.current)
                 )
             }
         }

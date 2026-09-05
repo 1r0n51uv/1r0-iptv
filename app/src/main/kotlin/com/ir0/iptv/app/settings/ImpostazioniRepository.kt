@@ -8,7 +8,8 @@ data class Impostazioni(
     val contenutoDiDefault: String? = null,
     val chiaveApiAi: String? = null,
     val chiaveApiSport: String? = null,
-    val sportInDashboard: Boolean = false
+    val sportInDashboard: Boolean = false,
+    val accento: String? = null
 )
 
 class ImpostazioniRepository(context: Context) {
@@ -23,7 +24,8 @@ class ImpostazioniRepository(context: Context) {
                 contenutoDiDefault = oggetto.optStringOrNull("contenutoDiDefault"),
                 chiaveApiAi = oggetto.optStringOrNull("chiaveApiAi"),
                 chiaveApiSport = oggetto.optStringOrNull("chiaveApiSport"),
-                sportInDashboard = oggetto.optBoolean("sportInDashboard", false)
+                sportInDashboard = oggetto.optBoolean("sportInDashboard", false),
+                accento = oggetto.optStringOrNull("accento")
             )
         } catch (e: Exception) {
             Impostazioni()
@@ -38,6 +40,7 @@ class ImpostazioniRepository(context: Context) {
                 .put("chiaveApiAi", impostazioni.chiaveApiAi)
                 .put("chiaveApiSport", impostazioni.chiaveApiSport)
                 .put("sportInDashboard", impostazioni.sportInDashboard)
+                .put("accento", impostazioni.accento)
                 .toString()
         )
     }

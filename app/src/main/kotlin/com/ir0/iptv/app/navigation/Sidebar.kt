@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.ir0.iptv.app.theme.LocalAccento
 
 @Composable
 fun Sidebar(
@@ -60,14 +61,15 @@ fun Sidebar(
 private fun SidebarButton(destinazione: Destinazione, active: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val accento = LocalAccento.current
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (active) Color(0xFFFFB454) else Color.Transparent)
+            .background(if (active) accento else Color.Transparent)
             .then(
                 if (isFocused && !active) {
-                    Modifier.border(2.dp, Color(0xFFFFB454), RoundedCornerShape(10.dp))
+                    Modifier.border(2.dp, accento, RoundedCornerShape(10.dp))
                 } else {
                     Modifier
                 }

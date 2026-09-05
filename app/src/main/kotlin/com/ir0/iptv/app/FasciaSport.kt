@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.domain.catalog.ContentCard
 
@@ -58,7 +59,7 @@ private fun CardPartita(conCanale: PartitaConCanale, onClick: (ContentCard.Canal
             .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
             .border(
                 2.dp,
-                if (infocata) Color(0xFFFFB454) else Color.Transparent,
+                if (infocata) LocalAccento.current else Color.Transparent,
                 RoundedCornerShape(10.dp)
             )
             .padding(horizontal = 18.dp, vertical = 14.dp),
@@ -67,7 +68,7 @@ private fun CardPartita(conCanale: PartitaConCanale, onClick: (ContentCard.Canal
         Text(
             text = listOfNotNull(partita.competizione, if (partita.inCorso) "IN CORSO" else null)
                 .joinToString(" · "),
-            color = if (partita.inCorso) Color(0xFFFFB454) else Color(0xFF6D7380),
+            color = if (partita.inCorso) LocalAccento.current else Color(0xFF6D7380),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold
         )
