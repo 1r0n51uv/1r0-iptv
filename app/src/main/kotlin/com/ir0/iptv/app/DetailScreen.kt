@@ -137,7 +137,7 @@ private fun DettaglioFilm(
             coloreEtichetta = Color(0xFF3B82F6),
             titolo = card.title,
             meta = card.categoria,
-            plot = card.plot,
+            plot = card.plot ?: dettagli?.trama,
             dettagli = dettagli
         ) {
             PulsanteAzione(

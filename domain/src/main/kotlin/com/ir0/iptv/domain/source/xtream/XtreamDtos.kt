@@ -5,7 +5,10 @@ data class XtreamLiveStreamDto(
     val streamId: Int,
     val streamIcon: String?,
     val epgChannelId: String?,
-    val categoryName: String?
+    val categoryName: String?,
+    /** Molti provider non mandano category_name sui Canali e vanno risolti con
+     * get_live_categories: vedi [com.ir0.iptv.app.content.ContentFetcher]. */
+    val categoryId: String? = null
 )
 
 data class XtreamVodStreamDto(
@@ -14,7 +17,9 @@ data class XtreamVodStreamDto(
     val streamIcon: String?,
     val plot: String?,
     val categoryName: String?,
-    val containerExtension: String
+    val containerExtension: String,
+    /** Come categoryId sopra, ma per i Film (get_vod_categories). */
+    val categoryId: String? = null
 )
 
 data class XtreamMovie(

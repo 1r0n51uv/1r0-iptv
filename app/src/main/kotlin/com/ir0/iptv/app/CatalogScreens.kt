@@ -60,6 +60,7 @@ fun SerieScreen(
         titolo = "Serie",
         contenuti = catalogo.serie,
         categoriaDi = { it.categoria },
+        categoriaDiRipiego = "Serie TV",
         visti = visti,
         onClick = onContenutoClick,
         onLongClick = onContenutoLongClick
@@ -105,16 +106,17 @@ private fun <T : ContentCard> SchermataOrganizzataPerCategoria(
     categoriaDi: (T) -> String?,
     visti: List<Visto>,
     onClick: (ContentCard) -> Unit,
-    onLongClick: (ContentCard) -> Unit
+    onLongClick: (ContentCard) -> Unit,
+    categoriaDiRipiego: String = CATEGORIA_ALTRO
 ) {
     if (contenuti.isEmpty()) {
         SchermataVuota("Nessun contenuto trovato in $titolo.")
         return
     }
-    val gruppi = remember(contenuti) {
+    val gruppi = remember(contenuti, categoriaDiRipiego) {
         contenuti.groupBy { card ->
-            categoriaDi(card)?.trim()?.takeIf { it.isNotBlank() } ?: CATEGORIA_ALTRO
-        }.toSortedMap(compareBy { if (it == CATEGORIA_ALTRO) "￿" else it })
+            categoriaDi(card)?.trim()?.takeIf { it.isNotBlank() } ?: categoriaDiRipiego
+        }.toSortedMap(compareBy { if (it == categoriaDiRipiego) "￿" else it })
     }
 
     Column(

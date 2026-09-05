@@ -104,11 +104,21 @@ class ContentFetcher(
     private fun catalogoDaXtream(sorgente: Sorgente.Xtream): ContentCatalog {
         val connection = sorgente.connection
 
+        // Molti provider non mandano category_name sui singoli Canali/Film/Serie: le tre liste
+        // di categorie risolvono category_id -> nome. Se una lista fallisce si prosegue senza,
+        // la categoria resta null e il contenuto cade nel gruppo di ripiego invece di sparire.
+        val categorieCanali = categorie(connection, "get_live_categories")
+        val categorieFilm = categorie(connection, "get_vod_categories")
+        val categorieSerie = categorie(connection, "get_series_categories")
+
         val canali = tryOrEmpty {
             streamJsonArray(xtreamApiUrl(connection, "get_live_streams")) { readLiveStreamDto() }
                 .map { dto ->
                     xtreamMapper.toChannel(dto, connection).toCanaleCard()
-                        .copy(xtream = RiferimentoXtream(dto.streamId, connection))
+                        .copy(
+                            categoria = dto.categoryName ?: categorieCanali[dto.categoryId],
+                            xtream = RiferimentoXtream(dto.streamId, connection)
+                        )
                 }
         }
 
@@ -120,7 +130,7 @@ class ContentFetcher(
                         title = movie.title,
                         imageUrl = movie.poster,
                         streamUrl = movie.url,
-                        categoria = movie.categoryName,
+                        categoria = dto.categoryName ?: categorieFilm[dto.categoryId],
                         plot = movie.plot,
                         xtream = RiferimentoXtream(dto.streamId, connection)
                     )
@@ -136,13 +146,17 @@ class ContentFetcher(
                         seriesId = item.seriesId,
                         connection = connection,
                         plot = item.plot,
-                        categoria = item.categoryName
+                        categoria = item.categoryName ?: categorieSerie[item.categoryId]
                     )
                 }
         }
 
         return ContentCatalog(canali = canali, film = film, serie = serie)
     }
+
+    private fun categorie(connection: XtreamConnection, azione: String): Map<String, String> =
+        tryOrEmpty { streamJsonArray(xtreamApiUrl(connection, azione)) { readCategoria() } }
+            .associate { it.id to it.name }
 
     /** Reads a large JSON array straight off the response stream, one object at a time, instead of
      * materializing the whole (often tens of MB) response body as a String first - real Xtream
@@ -206,8 +220,11 @@ private data class SeriesListItem(
     val name: String,
     val cover: String?,
     val plot: String?,
-    val categoryName: String?
+    val categoryName: String?,
+    val categoryId: String? = null
 )
+
+private data class XtreamCategoria(val id: String, val name: String)
 
 private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
     var name = ""
@@ -215,6 +232,7 @@ private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
     var streamIcon: String? = null
     var epgChannelId: String? = null
     var categoryName: String? = null
+    var categoryId: String? = null
     beginObject()
     while (hasNext()) {
         when (nextName()) {
@@ -223,11 +241,12 @@ private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
             "stream_icon" -> streamIcon = nextStringOrNull()
             "epg_channel_id" -> epgChannelId = nextStringOrNull()
             "category_name" -> categoryName = nextStringOrNull()
+            "category_id" -> categoryId = nextStringOrNull()
             else -> skipValue()
         }
     }
     endObject()
-    return XtreamLiveStreamDto(name, streamId, streamIcon, epgChannelId, categoryName)
+    return XtreamLiveStreamDto(name, streamId, streamIcon, epgChannelId, categoryName, categoryId)
 }
 
 private fun JsonReader.readVodStreamDto(): XtreamVodStreamDto {
@@ -236,6 +255,7 @@ private fun JsonReader.readVodStreamDto(): XtreamVodStreamDto {
     var streamIcon: String? = null
     var plot: String? = null
     var categoryName: String? = null
+    var categoryId: String? = null
     var containerExtension = "mp4"
     beginObject()
     while (hasNext()) {
@@ -245,12 +265,13 @@ private fun JsonReader.readVodStreamDto(): XtreamVodStreamDto {
             "stream_icon" -> streamIcon = nextStringOrNull()
             "plot" -> plot = nextStringOrNull()
             "category_name" -> categoryName = nextStringOrNull()
+            "category_id" -> categoryId = nextStringOrNull()
             "container_extension" -> containerExtension = nextStringOrNull() ?: "mp4"
             else -> skipValue()
         }
     }
     endObject()
-    return XtreamVodStreamDto(name, streamId, streamIcon, plot, categoryName, containerExtension)
+    return XtreamVodStreamDto(name, streamId, streamIcon, plot, categoryName, containerExtension, categoryId)
 }
 
 private fun JsonReader.readSeriesListItem(): SeriesListItem {
@@ -259,6 +280,7 @@ private fun JsonReader.readSeriesListItem(): SeriesListItem {
     var cover: String? = null
     var plot: String? = null
     var categoryName: String? = null
+    var categoryId: String? = null
     beginObject()
     while (hasNext()) {
         when (nextName()) {
@@ -267,11 +289,27 @@ private fun JsonReader.readSeriesListItem(): SeriesListItem {
             "cover" -> cover = nextStringOrNull()
             "plot" -> plot = nextStringOrNull()
             "category_name" -> categoryName = nextStringOrNull()
+            "category_id" -> categoryId = nextStringOrNull()
             else -> skipValue()
         }
     }
     endObject()
-    return SeriesListItem(seriesId, name, cover, plot, categoryName)
+    return SeriesListItem(seriesId, name, cover, plot, categoryName, categoryId)
+}
+
+private fun JsonReader.readCategoria(): XtreamCategoria {
+    var id = ""
+    var name = ""
+    beginObject()
+    while (hasNext()) {
+        when (nextName()) {
+            "category_id" -> id = nextStringFlexible()
+            "category_name" -> name = nextStringFlexible()
+            else -> skipValue()
+        }
+    }
+    endObject()
+    return XtreamCategoria(id, name)
 }
 
 private fun JsonReader.nextStringOrNull(): String? = when (peek()) {
@@ -347,6 +385,7 @@ private fun JSONObject.optStringOrNull(key: String): String? =
 private fun JSONObject.toDettaglioEsteso(): DettaglioEsteso {
     val durataSecondi = optStringOrNull("duration_secs")?.toLongOrNull()
     return DettaglioEsteso(
+        trama = optStringOrNull("plot")?.takeIf { it.isNotBlank() },
         genere = optStringOrNull("genre")?.takeIf { it.isNotBlank() },
         cast = optStringOrNull("cast")?.takeIf { it.isNotBlank() },
         regista = optStringOrNull("director")?.takeIf { it.isNotBlank() },
