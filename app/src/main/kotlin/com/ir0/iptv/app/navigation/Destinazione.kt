@@ -5,5 +5,6 @@ enum class Destinazione(val etichetta: String) {
     GUIDA("Guida TV"),
     SFOGLIA("Sfoglia"),
     CERCA("Cerca"),
-    PREFERITI("Preferiti")
+    PREFERITI("Preferiti"),
+    IMPOSTAZIONI("Impostazioni")
 }

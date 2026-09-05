@@ -1,6 +1,8 @@
 package com.ir0.iptv.app.webpanel
 
 import android.content.Context
+import com.ir0.iptv.app.settings.Impostazioni
+import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.catalog.RicercaCatalogo
@@ -26,6 +28,7 @@ object WebPanelServer {
     fun start(context: Context) {
         if (!started.compareAndSet(false, true)) return
         val repository = SorgenteRepository(context)
+        val impostazioniRepository = ImpostazioniRepository(context)
         val factory = SorgenteFactory()
 
         embeddedServer(CIO, port = PORT, host = "0.0.0.0") {
@@ -70,6 +73,28 @@ object WebPanelServer {
                 post("/sorgenti/{id}/elimina") {
                     repository.rimuovi(call.parameters["id"].orEmpty())
                     call.respondRedirect("/")
+                }
+                get("/impostazioni") {
+                    call.respondText(
+                        impostazioniPage(impostazioniRepository.leggi()),
+                        ContentType.Text.Html
+                    )
+                }
+                post("/impostazioni") {
+                    val params = call.receiveParameters()
+                    val correnti = impostazioniRepository.leggi()
+                    impostazioniRepository.salva(
+                        Impostazioni(
+                            contenutoDiDefault = params["contenutoDiDefault"]?.ifBlank { null },
+                            // Un campo chiave lasciato vuoto non cancella quella gia' salvata:
+                            // la pagina non la ristampa mai per non esporla.
+                            chiaveApiAi = params["chiaveApiAi"]?.ifBlank { null } ?: correnti.chiaveApiAi,
+                            chiaveApiSport = params["chiaveApiSport"]?.ifBlank { null } ?: correnti.chiaveApiSport,
+                            sportInDashboard = params["sportInDashboard"] == "on",
+                            accento = params["accento"]?.ifBlank { null } ?: correnti.accento
+                        )
+                    )
+                    call.respondRedirect("/impostazioni")
                 }
                 get("/riproduci") {
                     val query = call.request.queryParameters["q"].orEmpty()
@@ -236,6 +261,7 @@ private fun sourcesPage(sorgenti: List<Sorgente>): String {
             <div style="font-size: 13px; color: #6b6b66;">Playlist M3U e account Xtream Codes configurati su questa Android TV</div>
           </div>
           <div class="actions">
+            <a class="btn btn-ghost" href="/impostazioni">Impostazioni</a>
             <a class="btn btn-ghost" href="/riproduci">Riproduci sulla TV</a>
             <a class="btn btn-primary" href="/sorgenti/nuova">+ Aggiungi Sorgente</a>
           </div>
@@ -244,6 +270,50 @@ private fun sourcesPage(sorgenti: List<Sorgente>): String {
           <thead><tr><th>Nome</th><th>Tipo</th><th>Dettagli</th><th></th></tr></thead>
           <tbody>$righe</tbody>
         </table>
+        """.trimIndent()
+    )
+}
+
+private fun impostazioniPage(impostazioni: Impostazioni): String {
+    val statoAi = if (impostazioni.chiaveApiAi.isNullOrBlank()) "nessuna chiave salvata" else "chiave salvata"
+    val statoSport = if (impostazioni.chiaveApiSport.isNullOrBlank()) "nessuna chiave salvata" else "chiave salvata"
+    val accenti = listOf("AMBRA" to "Ambra", "BLU" to "Blu", "VERDE" to "Verde", "ROSA" to "Rosa")
+    val opzioniAccento = accenti.joinToString(separator = "") { (valore, etichetta) ->
+        val scelto = if ((impostazioni.accento ?: "AMBRA") == valore) "selected" else ""
+        """<option value="$valore" $scelto>$etichetta</option>"""
+    }
+    return pageShell(
+        """
+        <div class="list-header">
+          <div>
+            <div style="font-size: 20px; font-weight: 700;">Impostazioni</div>
+            <div style="font-size: 13px; color: #6b6b66;">Valgono per l'app sulla Android TV</div>
+          </div>
+          <a class="btn btn-ghost" href="/">Sorgenti</a>
+        </div>
+        <form method="post" action="/impostazioni">
+          <div class="field-label">Chiave API Claude (Suggeriti)</div>
+          <input class="field-input" name="chiaveApiAi" type="password" placeholder="$statoAi">
+          <div class="field-label">Chiave API football-data.org (Sport)</div>
+          <input class="field-input" name="chiaveApiSport" type="password" placeholder="$statoSport">
+          <div class="field-label">Sport in diretta in Dashboard</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;">
+            <input type="checkbox" name="sportInDashboard" ${if (impostazioni.sportInDashboard) "checked" else ""}>
+            Mostra due partite in evidenza
+          </label>
+          <div class="field-label">Contenuto di default (Chiave di Identita')</div>
+          <input class="field-input" name="contenutoDiDefault" placeholder="lasciare vuoto per usare l'ultimo aperto" value="${(impostazioni.contenutoDiDefault ?: "").escapeHtml()}">
+          <div class="field-label">Colore di accento</div>
+          <select class="field-input" name="accento">$opzioniAccento</select>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <a class="btn btn-ghost" href="/">Annulla</a>
+            <button class="btn btn-primary" type="submit">Salva Impostazioni</button>
+          </div>
+        </form>
+        <div style="font-size:12px;color:#6b6b66;margin-top:14px;">
+          Le chiavi restano su questa TV e non vengono mai ristampate qui: lasciando il campo vuoto
+          si tiene quella gia' salvata.
+        </div>
         """.trimIndent()
     )
 }

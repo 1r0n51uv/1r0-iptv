@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import com.ir0.iptv.domain.catalog.ContentCard
 
@@ -60,7 +61,7 @@ fun CardContenuto(
                 .background(Color(0xFF262B33))
                 .border(
                     2.dp,
-                    if (infocata) Color(0xFFFFB454) else Color.Transparent,
+                    if (infocata) LocalAccento.current else Color.Transparent,
                     RoundedCornerShape(8.dp)
                 )
         ) {
@@ -87,14 +88,14 @@ fun CardContenuto(
                         modifier = Modifier
                             .fillMaxWidth(percentuale / 100f)
                             .fillMaxHeight()
-                            .background(Color(0xFFFFB454))
+                            .background(LocalAccento.current)
                     )
                 }
             }
         }
         Text(
             text = card.title,
-            color = if (infocata) Color(0xFFFFB454) else Color(0xFFF2F2F0),
+            color = if (infocata) LocalAccento.current else Color(0xFFF2F2F0),
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

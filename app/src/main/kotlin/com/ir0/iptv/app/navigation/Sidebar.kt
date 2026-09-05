@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 
 @Composable
 fun Sidebar(
@@ -39,7 +40,7 @@ fun Sidebar(
     ) {
         Text(
             text = "1r0 IPTV",
-            color = Color(0xFFFFB454),
+            color = LocalAccento.current,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 12.dp, bottom = 18.dp)
@@ -67,7 +68,7 @@ private fun VoceSidebar(destinazione: Destinazione, attiva: Boolean, onClick: ()
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
             .background(
-                if (attiva) Color(0xFFFFB454) else Color.Transparent,
+                if (attiva) LocalAccento.current else Color.Transparent,
                 RoundedCornerShape(8.dp)
             )
             .border(

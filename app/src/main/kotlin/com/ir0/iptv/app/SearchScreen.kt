@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.catalog.RicercaCatalogo
@@ -58,14 +59,14 @@ fun SearchScreen(
             onValueChange = { query = it },
             singleLine = true,
             textStyle = TextStyle(color = Color(0xFFF2F2F0), fontSize = 18.sp),
-            cursorBrush = SolidColor(Color(0xFFFFB454)),
+            cursorBrush = SolidColor(LocalAccento.current),
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { infocato = it.isFocused }
                 .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
                 .border(
                     2.dp,
-                    if (infocato) Color(0xFFFFB454) else Color(0xFF262B33),
+                    if (infocato) LocalAccento.current else Color(0xFF262B33),
                     RoundedCornerShape(10.dp)
                 )
                 .padding(horizontal = 18.dp, vertical = 14.dp),
