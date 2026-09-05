@@ -1,12 +1,17 @@
 package com.ir0.iptv.app.content
 
+import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.RiferimentoXtream
 import com.ir0.iptv.domain.classification.ContentClassifier
 import com.ir0.iptv.domain.classification.ContentType
 import com.ir0.iptv.domain.classification.SeriesGrouper
+import com.ir0.iptv.domain.epg.Programma
+import com.ir0.iptv.domain.epg.XtreamEpgListingDto
+import com.ir0.iptv.domain.epg.XtreamEpgMapper
 import com.ir0.iptv.domain.source.Sorgente
 import com.ir0.iptv.domain.source.m3u.M3uEntry
 import com.ir0.iptv.domain.source.m3u.M3uParser
@@ -31,7 +36,8 @@ class ContentFetcher(
     private val m3uParser: M3uParser = M3uParser(),
     private val contentClassifier: ContentClassifier = ContentClassifier(),
     private val seriesGrouper: SeriesGrouper = SeriesGrouper(),
-    private val xtreamMapper: XtreamMapper = XtreamMapper()
+    private val xtreamMapper: XtreamMapper = XtreamMapper(),
+    private val xtreamEpgMapper: XtreamEpgMapper = XtreamEpgMapper()
 ) {
 
     suspend fun catalogo(sorgenti: List<Sorgente>): ContentCatalog = withContext(Dispatchers.IO) {
@@ -61,6 +67,18 @@ class ContentFetcher(
             }
         }
 
+    /** Palinsesto di un Canale Xtream; le Sorgenti M3U non espongono un EPG (vedi ADR 0002). */
+    suspend fun palinsesto(riferimento: RiferimentoXtream): List<Programma> = withContext(Dispatchers.IO) {
+        tryOrNull {
+            val url = xtreamApiUrl(riferimento.connection, "get_simple_data_table") +
+                "&stream_id=${riferimento.streamId}"
+            val listings = JSONObject(scarica(url)).optJSONArray("epg_listings") ?: return@tryOrNull emptyList()
+            xtreamEpgMapper.toProgrammi(
+                (0 until listings.length()).map { listings.getJSONObject(it).toEpgListingDto() }
+            )
+        }.orEmpty()
+    }
+
     private fun catalogoDaM3u(sorgente: Sorgente.M3u): ContentCatalog {
         val entries = m3uParser.parse(scarica(sorgente.url))
         val perTipo = entries.groupBy { contentClassifier.classify(it) }
@@ -78,7 +96,10 @@ class ContentFetcher(
 
         val canali = tryOrEmpty {
             streamJsonArray(xtreamApiUrl(connection, "get_live_streams")) { readLiveStreamDto() }
-                .map { xtreamMapper.toChannel(it, connection).toCanaleCard() }
+                .map { dto ->
+                    xtreamMapper.toChannel(dto, connection).toCanaleCard()
+                        .copy(xtream = RiferimentoXtream(dto.streamId, connection))
+                }
         }
 
         val film = tryOrEmpty {
@@ -281,6 +302,21 @@ private fun JSONObject.toEpisodeDto(): XtreamEpisodeDto = XtreamEpisodeDto(
     containerExtension = optStringOrNull("container_extension") ?: "mp4",
     immagine = optJSONObject("info")?.optStringOrNull("movie_image")
 )
+
+private fun JSONObject.toEpgListingDto(): XtreamEpgListingDto = XtreamEpgListingDto(
+    titolo = optStringOrNull("title").orEmpty().decodificaBase64(),
+    descrizione = optStringOrNull("description")?.decodificaBase64(),
+    inizioSecondi = optStringOrNull("start_timestamp")?.toLongOrNull() ?: 0,
+    fineSecondi = optStringOrNull("stop_timestamp")?.toLongOrNull() ?: 0
+)
+
+/** Xtream manda titolo e descrizione in base64, ma non tutti i provider lo fanno:
+ * se la decodifica non produce testo sensato si tiene il valore originale. */
+private fun String.decodificaBase64(): String = try {
+    String(Base64.decode(this, Base64.DEFAULT), Charsets.UTF_8).ifBlank { this }
+} catch (e: IllegalArgumentException) {
+    this
+}
 
 private fun JSONObject.optStringOrNull(key: String): String? =
     if (has(key) && !isNull(key)) getString(key) else null

@@ -3,6 +3,8 @@ package com.ir0.iptv.domain.catalog
 import com.ir0.iptv.domain.classification.Serie
 import com.ir0.iptv.domain.source.xtream.XtreamConnection
 
+data class RiferimentoXtream(val streamId: Int, val connection: XtreamConnection)
+
 sealed interface ContentCard {
     val title: String
     val imageUrl: String?
@@ -18,7 +20,9 @@ sealed interface ContentCard {
         override val title: String,
         override val imageUrl: String?,
         val streamUrl: String,
-        val categoria: String? = null
+        val categoria: String? = null,
+        /** Presente solo per i Canali Xtream: e' l'unica Sorgente da cui si legge l'EPG. */
+        val xtream: RiferimentoXtream? = null
     ) : ContentCard {
         override val chiaveIdentita: String get() = streamUrl
     }
