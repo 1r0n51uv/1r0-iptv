@@ -65,18 +65,19 @@ class MainActivity : ComponentActivity() {
                     sorgenti = sorgenteRepository.elenco()
                 }
             }
+            val webPanelAddress = remember { localWebPanelAddress() }
 
             if (sorgenti.isEmpty()) {
-                OnboardingScreen(webPanelAddress = remember { localWebPanelAddress() })
+                OnboardingScreen(webPanelAddress = webPanelAddress)
             } else {
-                ContentScreen(sorgenti)
+                ContentScreen(sorgenti, webPanelAddress)
             }
         }
     }
 }
 
 @Composable
-private fun ContentScreen(sorgenti: List<Sorgente>) {
+private fun ContentScreen(sorgenti: List<Sorgente>, webPanelAddress: String?) {
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     LaunchedEffect(sorgenti) {
         catalogo = ContentFetcher().catalogo(sorgenti)
@@ -92,12 +93,49 @@ private fun ContentScreen(sorgenti: List<Sorgente>) {
         backStack = backStack.dropLast(1)
     }
 
+    val onSidebarClick: (Int) -> Unit = { index -> backStack = listOf(screenForSidebarIndex(index)) }
+
     when (val schermata = backStack.last()) {
         is Screen.Home -> HomeScreen(
             catalogo = catalogoCorrente,
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick,
             onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
             onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) },
             onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
+        )
+
+        is Screen.Canali -> CanaliScreen(
+            catalogo = catalogoCorrente,
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick,
+            onCanaleClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) }
+        )
+
+        is Screen.Film -> FilmScreen(
+            catalogo = catalogoCorrente,
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick,
+            onFilmClick = { backStack = backStack + Screen.Player(it.title, it.streamUrl) }
+        )
+
+        is Screen.Serie -> SerieScreen(
+            catalogo = catalogoCorrente,
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick,
+            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
+        )
+
+        is Screen.Preferiti -> PreferitiScreen(
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick
+        )
+
+        is Screen.Impostazioni -> ImpostazioniScreen(
+            sorgenti = sorgenti,
+            webPanelAddress = webPanelAddress,
+            activeIndex = sidebarIndexForScreen(schermata),
+            onSidebarClick = onSidebarClick
         )
 
         is Screen.SeriesDetail -> SeriesDetailScreen(

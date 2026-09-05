@@ -2,6 +2,10 @@ package com.ir0.iptv.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -23,10 +31,19 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 
-private enum class SidebarGlyph { HOME, TV, SEARCH, GUIDE, FAVORITE, SETTINGS }
+private enum class SidebarGlyph { HOME, CANALI, FILM, SERIE, FAVORITE, SETTINGS }
+
+/** Index of the pinned bottom icon; 0-4 are the evenly-spaced top icons. Kept in sync with
+ * [screenForSidebarIndex] / [sidebarIndexForScreen] in Screen.kt. */
+const val SIDEBAR_SETTINGS_INDEX = 5
 
 @Composable
-fun Sidebar(activeIndex: Int, modifier: Modifier = Modifier) {
+fun Sidebar(
+    activeIndex: Int,
+    onItemClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    activeFocusRequester: FocusRequester? = null
+) {
     Column(
         modifier = modifier
             .width(88.dp)
@@ -36,21 +53,44 @@ fun Sidebar(activeIndex: Int, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Box(Modifier.padding(top = 24.dp))
-        listOf(SidebarGlyph.HOME, SidebarGlyph.TV, SidebarGlyph.SEARCH, SidebarGlyph.GUIDE, SidebarGlyph.FAVORITE)
-            .forEachIndexed { index, glyph -> SidebarButton(glyph = glyph, active = index == activeIndex) }
+        listOf(SidebarGlyph.HOME, SidebarGlyph.CANALI, SidebarGlyph.FILM, SidebarGlyph.SERIE, SidebarGlyph.FAVORITE)
+            .forEachIndexed { index, glyph ->
+                SidebarButton(
+                    glyph = glyph,
+                    active = index == activeIndex,
+                    onClick = { onItemClick(index) },
+                    focusRequester = if (index == activeIndex) activeFocusRequester else null
+                )
+            }
         Box(Modifier.weight(1f))
-        SidebarButton(glyph = SidebarGlyph.SETTINGS, active = false)
+        SidebarButton(
+            glyph = SidebarGlyph.SETTINGS,
+            active = activeIndex == SIDEBAR_SETTINGS_INDEX,
+            onClick = { onItemClick(SIDEBAR_SETTINGS_INDEX) },
+            focusRequester = if (activeIndex == SIDEBAR_SETTINGS_INDEX) activeFocusRequester else null
+        )
         Box(Modifier.padding(bottom = 24.dp))
     }
 }
 
 @Composable
-private fun SidebarButton(glyph: SidebarGlyph, active: Boolean) {
+private fun SidebarButton(glyph: SidebarGlyph, active: Boolean, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (active) Color(0xFFFFB454) else Color.Transparent),
+            .background(if (active) Color(0xFFFFB454) else Color.Transparent)
+            .then(
+                if (isFocused && !active) {
+                    Modifier.border(2.dp, Color(0xFFFFB454), RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         SidebarGlyphIcon(glyph = glyph, color = if (active) Color(0xFF14161A) else Color(0xFF9AA0AA))
@@ -79,7 +119,7 @@ private fun SidebarGlyphIcon(glyph: SidebarGlyph, color: Color) {
                 )
             }
 
-            SidebarGlyph.TV -> {
+            SidebarGlyph.CANALI -> {
                 drawRoundRect(
                     color = color,
                     topLeft = Offset(w * 0.05f, h * 0.15f),
@@ -91,22 +131,43 @@ private fun SidebarGlyphIcon(glyph: SidebarGlyph, color: Color) {
                 drawLine(color, Offset(w * 0.5f, h * 0.8f), Offset(w * 0.5f, h * 0.95f), strokeWidth = stroke.width, cap = StrokeCap.Round)
             }
 
-            SidebarGlyph.SEARCH -> {
-                drawCircle(color = color, radius = w * 0.32f, center = Offset(w * 0.42f, h * 0.42f), style = stroke)
-                drawLine(color, Offset(w * 0.68f, h * 0.68f), Offset(w * 0.92f, h * 0.92f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-            }
-
-            SidebarGlyph.GUIDE -> {
+            SidebarGlyph.FILM -> {
                 drawRoundRect(
                     color = color,
-                    topLeft = Offset(w * 0.08f, h * 0.12f),
-                    size = Size(w * 0.84f, h * 0.78f),
-                    cornerRadius = CornerRadius(w * 0.08f, w * 0.08f),
+                    topLeft = Offset(w * 0.05f, h * 0.08f),
+                    size = Size(w * 0.9f, h * 0.22f),
+                    cornerRadius = CornerRadius(w * 0.04f, w * 0.04f),
                     style = stroke
                 )
-                drawLine(color, Offset(w * 0.08f, h * 0.36f), Offset(w * 0.92f, h * 0.36f), strokeWidth = stroke.width)
-                drawLine(color, Offset(w * 0.33f, h * 0.06f), Offset(w * 0.33f, h * 0.2f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(w * 0.67f, h * 0.06f), Offset(w * 0.67f, h * 0.2f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                val stripeXs = listOf(0.24f, 0.48f, 0.72f)
+                stripeXs.forEach { fraction ->
+                    drawLine(
+                        color,
+                        Offset(w * fraction, h * 0.08f),
+                        Offset(w * (fraction - 0.08f), h * 0.30f),
+                        strokeWidth = stroke.width
+                    )
+                }
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(w * 0.05f, h * 0.34f),
+                    size = Size(w * 0.9f, h * 0.58f),
+                    cornerRadius = CornerRadius(w * 0.06f, w * 0.06f),
+                    style = stroke
+                )
+            }
+
+            SidebarGlyph.SERIE -> {
+                listOf(0.28f, 0.5f, 0.72f).forEach { cy ->
+                    val chevron = Path().apply {
+                        moveTo(w * 0.5f, h * (cy - 0.12f))
+                        lineTo(w * 0.92f, h * cy)
+                        lineTo(w * 0.5f, h * (cy + 0.12f))
+                        lineTo(w * 0.08f, h * cy)
+                        close()
+                    }
+                    drawPath(chevron, color = color, style = stroke)
+                }
             }
 
             SidebarGlyph.FAVORITE -> {

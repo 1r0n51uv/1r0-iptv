@@ -11,12 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -36,102 +32,60 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.ir0.iptv.app.content.ContentCard
 import com.ir0.iptv.app.content.ContentCatalog
-import com.ir0.iptv.app.util.DownsampleBlurTransformation
 
 @Composable
 fun HomeScreen(
     catalogo: ContentCatalog,
+    activeIndex: Int,
+    onSidebarClick: (Int) -> Unit,
     onCanaleClick: (ContentCard.Canale) -> Unit,
     onFilmClick: (ContentCard.Film) -> Unit,
     onSerieClick: (ContentCard.SerieCard) -> Unit
 ) {
     val hero: ContentCard? = catalogo.serie.firstOrNull() ?: catalogo.film.firstOrNull() ?: catalogo.canali.firstOrNull()
 
-    MaterialTheme {
-        Surface(color = Color(0xFF14161A)) {
-            Box(Modifier.fillMaxSize()) {
-                if (hero?.imageUrl != null) {
-                    val context = LocalContext.current
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(hero.imageUrl)
-                            .transformations(DownsampleBlurTransformation())
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.45f
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xCC14161A))
+    AppScaffold(activeIndex = activeIndex, onSidebarClick = onSidebarClick, backgroundImageUrl = hero?.imageUrl) {
+        LazyColumn(
+            contentPadding = PaddingValues(vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            if (hero != null) {
+                item {
+                    HeroSection(
+                        hero = hero,
+                        onCanaleClick = onCanaleClick,
+                        onFilmClick = onFilmClick,
+                        onSerieClick = onSerieClick
                     )
                 }
-
-                Row(Modifier.fillMaxSize()) {
-                    Sidebar(activeIndex = 0)
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        TopBar()
-                        LazyColumn(
-                            contentPadding = PaddingValues(vertical = 20.dp),
-                            verticalArrangement = Arrangement.spacedBy(24.dp)
-                        ) {
-                            if (hero != null) {
-                                item {
-                                    HeroSection(
-                                        hero = hero,
-                                        onCanaleClick = onCanaleClick,
-                                        onFilmClick = onFilmClick,
-                                        onSerieClick = onSerieClick
-                                    )
-                                }
-                            }
-                            if (catalogo.isEmpty) {
-                                item {
-                                    Text(
-                                        text = "Nessun contenuto trovato nelle Sorgenti configurate.",
-                                        color = Color(0xFF9AA0AA),
-                                        fontSize = 16.sp,
-                                        modifier = Modifier.padding(horizontal = 36.dp)
-                                    )
-                                }
-                            } else {
-                                if (catalogo.canali.isNotEmpty()) {
-                                    item { ContentRow(titolo = "Canali", items = catalogo.canali, onClick = onCanaleClick) }
-                                }
-                                if (catalogo.film.isNotEmpty()) {
-                                    item { ContentRow(titolo = "Film", items = catalogo.film, onClick = onFilmClick, tall = true) }
-                                }
-                                if (catalogo.serie.isNotEmpty()) {
-                                    item { ContentRow(titolo = "Serie", items = catalogo.serie, onClick = onSerieClick, tall = true) }
-                                }
-                            }
-                        }
-                    }
+            }
+            if (catalogo.isEmpty) {
+                item {
+                    Text(
+                        text = "Nessun contenuto trovato nelle Sorgenti configurate.",
+                        color = Color(0xFF9AA0AA),
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(horizontal = 36.dp)
+                    )
+                }
+            } else {
+                if (catalogo.canali.isNotEmpty()) {
+                    item { ContentRow(titolo = "Canali", items = catalogo.canali, onClick = onCanaleClick) }
+                }
+                if (catalogo.film.isNotEmpty()) {
+                    item { ContentRow(titolo = "Film", items = catalogo.film, onClick = onFilmClick, tall = true) }
+                }
+                if (catalogo.serie.isNotEmpty()) {
+                    item { ContentRow(titolo = "Serie", items = catalogo.serie, onClick = onSerieClick, tall = true) }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TopBar() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = "1r0 IPTV", color = Color(0xFFF2F2F0), fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -236,51 +190,5 @@ private fun <T : ContentCard> ContentRow(titolo: String, items: List<T>, onClick
         ) {
             items(items) { item -> ContentCardView(card = item, tall = tall, onClick = { onClick(item) }) }
         }
-    }
-}
-
-@Composable
-private fun ContentCardView(card: ContentCard, tall: Boolean, onClick: () -> Unit) {
-    val cardWidth = if (tall) 148.dp else 200.dp
-    val cardHeight = if (tall) 210.dp else 110.dp
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(targetValue = if (isFocused) 1.1f else 1f, label = "cardScale")
-    Column(
-        modifier = Modifier
-            .width(cardWidth)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .width(cardWidth)
-                .height(cardHeight)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF262B33))
-                .then(
-                    if (isFocused) Modifier.border(3.dp, Color(0xFFFFB454), RoundedCornerShape(10.dp)) else Modifier
-                )
-        ) {
-            val imageUrl = card.imageUrl
-            if (imageUrl != null) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = card.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-        Text(
-            text = card.title,
-            color = if (isFocused) Color(0xFFFFB454) else Color(0xFFF2F2F0),
-            fontSize = 14.sp,
-            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
-            maxLines = if (tall) 2 else 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(cardWidth)
-        )
     }
 }
