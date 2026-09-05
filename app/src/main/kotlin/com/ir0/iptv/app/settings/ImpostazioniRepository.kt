@@ -6,7 +6,9 @@ import org.json.JSONObject
 
 data class Impostazioni(
     val contenutoDiDefault: String? = null,
-    val chiaveApiAi: String? = null
+    val chiaveApiAi: String? = null,
+    val chiaveApiSport: String? = null,
+    val sportInDashboard: Boolean = false
 )
 
 class ImpostazioniRepository(context: Context) {
@@ -19,7 +21,9 @@ class ImpostazioniRepository(context: Context) {
             val oggetto = JSONObject(file.readText())
             Impostazioni(
                 contenutoDiDefault = oggetto.optStringOrNull("contenutoDiDefault"),
-                chiaveApiAi = oggetto.optStringOrNull("chiaveApiAi")
+                chiaveApiAi = oggetto.optStringOrNull("chiaveApiAi"),
+                chiaveApiSport = oggetto.optStringOrNull("chiaveApiSport"),
+                sportInDashboard = oggetto.optBoolean("sportInDashboard", false)
             )
         } catch (e: Exception) {
             Impostazioni()
@@ -32,6 +36,8 @@ class ImpostazioniRepository(context: Context) {
             JSONObject()
                 .put("contenutoDiDefault", impostazioni.contenutoDiDefault)
                 .put("chiaveApiAi", impostazioni.chiaveApiAi)
+                .put("chiaveApiSport", impostazioni.chiaveApiSport)
+                .put("sportInDashboard", impostazioni.sportInDashboard)
                 .toString()
         )
     }
