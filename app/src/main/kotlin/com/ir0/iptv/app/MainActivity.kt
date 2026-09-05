@@ -134,8 +134,15 @@ private fun ContentScreen(
 ) {
     val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
-    LaunchedEffect(sorgenti) {
-        catalogo = ContentFetcher().catalogo(sorgenti)
+    var richiesteDiAggiornamento by remember(sorgenti) { mutableStateOf(0) }
+    var inAggiornamento by remember(sorgenti) { mutableStateOf(false) }
+    LaunchedEffect(sorgenti, richiesteDiAggiornamento) {
+        inAggiornamento = true
+        // Il catalogo vecchio resta a schermo durante un aggiornamento: azzerarlo
+        // riporterebbe allo scheletro di caricamento ad ogni refresh.
+        val aggiornato = ContentFetcher().catalogo(sorgenti)
+        catalogo = aggiornato
+        inAggiornamento = false
     }
     val catalogoCorrente = catalogo
     if (catalogoCorrente == null) {
@@ -230,7 +237,9 @@ private fun ContentScreen(
                 onSeleziona = {
                     destinazione = it
                     sovrapposte = emptyList()
-                }
+                },
+                inAggiornamento = inAggiornamento,
+                onAggiorna = { richiesteDiAggiornamento++ }
             )
             Box(modifier = Modifier.fillMaxSize()) {
                 when (sopra) {

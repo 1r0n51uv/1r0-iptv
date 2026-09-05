@@ -34,6 +34,8 @@ import com.ir0.iptv.app.theme.LocalAccento
 fun Sidebar(
     selezionata: Destinazione,
     onSeleziona: (Destinazione) -> Unit,
+    inAggiornamento: Boolean = false,
+    onAggiorna: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -53,6 +55,7 @@ fun Sidebar(
             )
         }
         Box(Modifier.weight(1f))
+        RefreshButton(inAggiornamento = inAggiornamento, onClick = onAggiorna)
         Box(Modifier.padding(bottom = 24.dp))
     }
 }
@@ -78,6 +81,58 @@ private fun SidebarButton(destinazione: Destinazione, active: Boolean, onClick: 
         contentAlignment = Alignment.Center
     ) {
         SidebarGlyphIcon(destinazione = destinazione, color = if (active) Color(0xFF14161A) else Color(0xFF9AA0AA))
+    }
+}
+
+@Composable
+private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val accento = LocalAccento.current
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (isFocused) {
+                    Modifier.border(2.dp, accento, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = !inAggiornamento,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        RefreshGlyphIcon(color = if (inAggiornamento) Color(0xFF4A505C) else Color(0xFF9AA0AA))
+    }
+}
+
+@Composable
+private fun RefreshGlyphIcon(color: Color) {
+    Canvas(modifier = Modifier.size(19.dp)) {
+        val stroke = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round)
+        val w = size.width
+        val h = size.height
+        drawArc(
+            color = color,
+            startAngle = -220f,
+            sweepAngle = 250f,
+            useCenter = false,
+            topLeft = Offset(w * 0.1f, h * 0.1f),
+            size = Size(w * 0.8f, h * 0.8f),
+            style = stroke
+        )
+        val arrow = Path().apply {
+            moveTo(w * 0.78f, h * 0.06f)
+            lineTo(w * 0.94f, h * 0.18f)
+            lineTo(w * 0.74f, h * 0.3f)
+        }
+        drawPath(arrow, color = color, style = stroke)
     }
 }
 

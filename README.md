@@ -2,12 +2,12 @@
 
 App IPTV personalizzata per Android TV (Kotlin, Compose for TV, Media3), con un pannello di gestione web integrato per configurare Sorgenti (playlist M3U o account Xtream Codes) senza usare il telecomando.
 
-Vedi [`CONTEXT.md`](CONTEXT.md) per il glossario di dominio e [`docs/adr/`](docs/adr/) per le decisioni architetturali.
+Vedi [`CONTEXT.md`](CONTEXT.md) per il glossario di dominio, [`docs/adr/`](docs/adr/) per le decisioni architetturali e [`ROADMAP.md`](ROADMAP.md) per lo stato delle funzionalità.
 
 ## Struttura del progetto
 
-- `app/` — app Android TV (Compose, Media3, pannello web embedded). Al momento contiene solo uno scaffold "Hello World" per validare il toolchain su un dispositivo reale; le schermate vere arriveranno modulo per modulo.
-- `domain/` — logica di dominio pura (Kotlin/JVM, nessuna dipendenza Android), sviluppata in TDD: parsing M3U, classificazione Canale/Film/Serie, raggruppamento Stagioni/Episodi, chiave di identità e merge delle Personalizzazioni, mapping Xtream Codes.
+- `app/` — app Android TV (Compose, Media3, pannello web embedded): Sidebar, Dashboard, Dettaglio, Guida TV, Cerca, Preferiti, Impostazioni e player con ripresa.
+- `domain/` — logica di dominio pura (Kotlin/JVM, nessuna dipendenza Android), sviluppata in TDD: parsing M3U, classificazione Canale/Film/Serie, raggruppamento Stagioni/Episodi, chiave di identità e merge delle Personalizzazioni, mapping Xtream Codes, Visti e ripresa, righe della Dashboard, ricerca, EPG e scelta delle partite in evidenza.
 - `design/wireframe/` — sorgenti del wireframe navigabile delle schermate (app TV + pannello web).
 
 ## Requisiti
