@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -46,12 +47,14 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     var infocato by remember { mutableStateOf(false) }
     val risultati = remember(query, catalogo) { ricerca.cerca(catalogo, query) }
+    val canali = remember(risultati) { risultati.filterIsInstance<ContentCard.Canale>() }
+    val film = remember(risultati) { risultati.filterIsInstance<ContentCard.Film>() }
+    val serie = remember(risultati) { risultati.filterIsInstance<ContentCard.SerieCard>() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
-            .padding(32.dp),
+            .background(Color(0xFF14161A)),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         BasicTextField(
@@ -62,6 +65,8 @@ fun SearchScreen(
             cursorBrush = SolidColor(LocalAccento.current),
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 32.dp)
+                .padding(top = 32.dp)
                 .onFocusChanged { infocato = it.isFocused }
                 .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
                 .border(
@@ -82,21 +87,55 @@ fun SearchScreen(
             query.isBlank() -> Text(
                 text = "Digita per cercare nel catalogo.",
                 color = Color(0xFF6D7380),
-                fontSize = 15.sp
+                fontSize = 15.sp,
+                modifier = Modifier.padding(horizontal = 32.dp)
             )
 
             risultati.isEmpty() -> Text(
                 text = "Nessun risultato per \"$query\".",
                 color = Color(0xFF9AA0AA),
-                fontSize = 15.sp
+                fontSize = 15.sp,
+                modifier = Modifier.padding(horizontal = 32.dp)
             )
 
-            else -> GrigliaContenuti(
-                contenuti = risultati,
-                visti = visti,
-                onClick = onContenutoClick,
-                onLongClick = onContenutoLongClick
-            )
+            else -> LazyColumn(
+                contentPadding = PaddingValues(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(28.dp)
+            ) {
+                item {
+                    RigaContenuti(
+                        titolo = "Canali",
+                        contenuti = canali,
+                        visti = visti,
+                        chiaveDaFocalizzare = null,
+                        focusRequester = null,
+                        onClick = onContenutoClick,
+                        onLongClick = onContenutoLongClick
+                    )
+                }
+                item {
+                    RigaContenuti(
+                        titolo = "Film",
+                        contenuti = film,
+                        visti = visti,
+                        chiaveDaFocalizzare = null,
+                        focusRequester = null,
+                        onClick = onContenutoClick,
+                        onLongClick = onContenutoLongClick
+                    )
+                }
+                item {
+                    RigaContenuti(
+                        titolo = "Serie",
+                        contenuti = serie,
+                        visti = visti,
+                        chiaveDaFocalizzare = null,
+                        focusRequester = null,
+                        onClick = onContenutoClick,
+                        onLongClick = onContenutoLongClick
+                    )
+                }
+            }
         }
     }
 }
