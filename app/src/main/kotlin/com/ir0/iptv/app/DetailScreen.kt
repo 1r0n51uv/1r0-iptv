@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
@@ -305,7 +306,7 @@ private fun Testata(
 private fun PulsanteAzione(testo: String, principale: Boolean = false, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
     val sfondo = when {
-        principale -> Color(0xFFFFB454)
+        principale -> LocalAccento.current
         infocato -> Color(0xFF3A404A)
         else -> Color(0xFF262B33)
     }
@@ -328,7 +329,7 @@ private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
     Text(
         text = if (preferito) "★ Nei Preferiti" else "☆ Preferiti",
-        color = if (preferito) Color(0xFFFFB454) else Color(0xFFF2F2F0),
+        color = if (preferito) LocalAccento.current else Color(0xFFF2F2F0),
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
@@ -357,7 +358,7 @@ private fun SelettoreStagioni(
                 modifier = Modifier
                     .clickable { onSeleziona(stagione) }
                     .background(
-                        if (attiva) Color(0xFFFFB454) else Color(0xFF1F232A),
+                        if (attiva) LocalAccento.current else Color(0xFF1F232A),
                         RoundedCornerShape(8.dp)
                     )
                     .padding(horizontal = 16.dp, vertical = 9.dp)
@@ -415,7 +416,7 @@ private fun CardEpisodio(
                 .background(Color(0xFF262B33))
                 .border(
                     2.dp,
-                    if (infocato) Color(0xFFFFB454) else Color.Transparent,
+                    if (infocato) LocalAccento.current else Color.Transparent,
                     RoundedCornerShape(8.dp)
                 )
         ) {
@@ -459,7 +460,7 @@ private fun BarraProgresso(percentuale: Int, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxWidth(percentuale / 100f)
                 .fillMaxHeight()
-                .background(Color(0xFFFFB454))
+                .background(LocalAccento.current)
         )
     }
 }

@@ -24,8 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,9 +50,12 @@ import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.session.StatoSessioneRepository
+import com.ir0.iptv.app.settings.Impostazioni
+import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.app.sport.SportInEvidenza
-import com.ir0.iptv.app.settings.ImpostazioniRepository
+import com.ir0.iptv.app.theme.Accento
+import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.webpanel.PonteTv
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
@@ -139,6 +143,7 @@ private fun ContentScreen(
         return
     }
 
+    var impostazioni by remember { mutableStateOf(impostazioniRepository.leggi()) }
     var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
     var sovrapposte by remember { mutableStateOf(listOf<Screen>()) }
     BackHandler(enabled = sovrapposte.isNotEmpty()) {
@@ -155,7 +160,6 @@ private fun ContentScreen(
     var rigaSuggeriti by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
     var partiteInEvidenza by remember(catalogoCorrente) { mutableStateOf(emptyList<PartitaConCanale>()) }
     LaunchedEffect(catalogoCorrente) {
-        val impostazioni = impostazioniRepository.leggi()
         rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
         rigaSuggeriti = suggerimentiAi.riga(
             chiaveApi = impostazioni.chiaveApiAi,
@@ -219,68 +223,79 @@ private fun ContentScreen(
         return
     }
 
-    Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
-        Sidebar(
-            selezionata = destinazione,
-            onSeleziona = {
-                destinazione = it
-                sovrapposte = emptyList()
-            }
-        )
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (sopra) {
-                is Screen.Detail -> {
-                    var preferito by remember(sopra.card) {
-                        mutableStateOf(personalizzazioneRepository.preferito(sopra.card))
-                    }
-                    DetailScreen(
-                        card = sopra.card,
-                        visti = visti,
-                        preferito = preferito,
-                        onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(sopra.card) },
-                        onRiproduci = { richiesta, posizione ->
-                            sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
-                        },
-                        onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
-                    )
+    CompositionLocalProvider(LocalAccento provides Accento.daNome(impostazioni.accento).colore) {
+        Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
+            Sidebar(
+                selezionata = destinazione,
+                onSeleziona = {
+                    destinazione = it
+                    sovrapposte = emptyList()
                 }
+            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (sopra) {
+                    is Screen.Detail -> {
+                        var preferito by remember(sopra.card) {
+                            mutableStateOf(personalizzazioneRepository.preferito(sopra.card))
+                        }
+                        DetailScreen(
+                            card = sopra.card,
+                            visti = visti,
+                            preferito = preferito,
+                            onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(sopra.card) },
+                            onRiproduci = { richiesta, posizione ->
+                                sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
+                            },
+                            onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
+                        )
+                    }
 
-                else -> when (destinazione) {
-                    Destinazione.DASHBOARD -> DashboardScreen(
-                        righe = righe,
-                        visti = visti,
-                        chiaveDaFocalizzare = chiaveDaFocalizzare,
-                        sport = partiteInEvidenza,
+                    else -> when (destinazione) {
+                        Destinazione.DASHBOARD -> DashboardScreen(
+                            righe = righe,
+                            visti = visti,
+                            chiaveDaFocalizzare = chiaveDaFocalizzare,
+                            sport = partiteInEvidenza,
                                 onContenutoClick = { apri(it) },
-                        onContenutoLongClick = { riproduciConDaCard(context, it) }
-                    )
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
 
-                    Destinazione.GUIDA -> GuidaTvScreen(
-                        catalogo = catalogoCorrente,
-                        onCanaleClick = { apri(it) }
-                    )
+                        Destinazione.GUIDA -> GuidaTvScreen(
+                            catalogo = catalogoCorrente,
+                            onCanaleClick = { apri(it) }
+                        )
 
-                    Destinazione.SFOGLIA -> BrowseScreen(
-                        catalogo = catalogoCorrente,
-                        visti = visti,
-                        chiaveDaFocalizzare = chiaveDaFocalizzare,
+                        Destinazione.SFOGLIA -> BrowseScreen(
+                            catalogo = catalogoCorrente,
+                            visti = visti,
+                            chiaveDaFocalizzare = chiaveDaFocalizzare,
                                 onContenutoClick = { apri(it) },
-                        onContenutoLongClick = { riproduciConDaCard(context, it) }
-                    )
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
 
-                    Destinazione.CERCA -> SearchScreen(
-                        catalogo = catalogoCorrente,
-                        visti = visti,
-                        onContenutoClick = { apri(it) },
-                        onContenutoLongClick = { riproduciConDaCard(context, it) }
-                    )
+                        Destinazione.CERCA -> SearchScreen(
+                            catalogo = catalogoCorrente,
+                            visti = visti,
+                            onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
 
-                    Destinazione.PREFERITI -> FavoritesScreen(
-                        preferiti = elencoPreferiti.preferiti(catalogoCorrente, personalizzazioni),
-                        visti = visti,
-                        onContenutoClick = { apri(it) },
-                        onContenutoLongClick = { riproduciConDaCard(context, it) }
-                    )
+                        Destinazione.PREFERITI -> FavoritesScreen(
+                            preferiti = elencoPreferiti.preferiti(catalogoCorrente, personalizzazioni),
+                            visti = visti,
+                            onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
+
+                        Destinazione.IMPOSTAZIONI -> ImpostazioniScreen(
+                            impostazioni = impostazioni,
+                            indirizzoPannelloWeb = remember { localWebPanelAddress() },
+                            onCambia = { aggiornate ->
+                                impostazioniRepository.salva(aggiornate)
+                                impostazioni = aggiornate
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -338,7 +353,7 @@ private fun OnboardingScreen(webPanelAddress: String?) {
                     ) {
                         Text(
                             text = "PRIMO AVVIO",
-                            color = Color(0xFFFFB454),
+                            color = LocalAccento.current,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
