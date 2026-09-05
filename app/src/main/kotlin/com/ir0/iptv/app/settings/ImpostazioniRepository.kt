@@ -5,7 +5,8 @@ import java.io.File
 import org.json.JSONObject
 
 data class Impostazioni(
-    val contenutoDiDefault: String? = null
+    val contenutoDiDefault: String? = null,
+    val chiaveApiAi: String? = null
 )
 
 class ImpostazioniRepository(context: Context) {
@@ -17,7 +18,8 @@ class ImpostazioniRepository(context: Context) {
         return try {
             val oggetto = JSONObject(file.readText())
             Impostazioni(
-                contenutoDiDefault = oggetto.optStringOrNull("contenutoDiDefault")
+                contenutoDiDefault = oggetto.optStringOrNull("contenutoDiDefault"),
+                chiaveApiAi = oggetto.optStringOrNull("chiaveApiAi")
             )
         } catch (e: Exception) {
             Impostazioni()
@@ -29,6 +31,7 @@ class ImpostazioniRepository(context: Context) {
         file.writeText(
             JSONObject()
                 .put("contenutoDiDefault", impostazioni.contenutoDiDefault)
+                .put("chiaveApiAi", impostazioni.chiaveApiAi)
                 .toString()
         )
     }
