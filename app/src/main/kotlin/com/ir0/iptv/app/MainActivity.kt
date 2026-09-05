@@ -231,6 +231,11 @@ private fun ContentScreen(
                         onContenutoLongClick = { riproduciConDaCard(context, it) }
                     )
 
+                    Destinazione.GUIDA -> GuidaTvScreen(
+                        catalogo = catalogoCorrente,
+                        onCanaleClick = { apri(it) }
+                    )
+
                     Destinazione.SFOGLIA -> BrowseScreen(
                         catalogo = catalogoCorrente,
                         visti = visti,
