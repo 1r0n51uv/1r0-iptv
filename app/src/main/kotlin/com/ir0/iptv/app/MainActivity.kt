@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
+import com.ir0.iptv.app.dashboard.NuoviEpisodi
+import com.ir0.iptv.app.dashboard.NuoviEpisodiRepository
 import com.ir0.iptv.app.navigation.Destinazione
 import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
@@ -54,6 +56,7 @@ import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.catalog.ElencoPreferiti
 import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
 import com.ir0.iptv.domain.dashboard.MemoriaFocus
+import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -79,6 +82,7 @@ class MainActivity : ComponentActivity() {
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         val statoSessioneRepository = StatoSessioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
+        val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -96,7 +100,8 @@ class MainActivity : ComponentActivity() {
                     vistoRepository = vistoRepository,
                     personalizzazioneRepository = personalizzazioneRepository,
                     statoSessioneRepository = statoSessioneRepository,
-                    impostazioniRepository = impostazioniRepository
+                    impostazioniRepository = impostazioniRepository,
+                    nuoviEpisodi = nuoviEpisodi
                 )
             }
         }
@@ -109,7 +114,8 @@ private fun ContentScreen(
     vistoRepository: VistoRepository,
     personalizzazioneRepository: PersonalizzazioneRepository,
     statoSessioneRepository: StatoSessioneRepository,
-    impostazioniRepository: ImpostazioniRepository
+    impostazioniRepository: ImpostazioniRepository,
+    nuoviEpisodi: NuoviEpisodi
 ) {
     val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
@@ -134,8 +140,18 @@ private fun ContentScreen(
     val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente) {
         personalizzazioneRepository.elenco()
     }
-    val righe = remember(catalogoCorrente, visti, personalizzazioni) {
-        costruttoreDashboard.costruisci(catalogoCorrente, visti, personalizzazioni)
+    var rigaNuoviEpisodi by remember(catalogoCorrente) { mutableStateOf<RigaDashboard?>(null) }
+    LaunchedEffect(catalogoCorrente) {
+        rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
+    }
+
+    val righe = remember(catalogoCorrente, visti, personalizzazioni, rigaNuoviEpisodi) {
+        costruttoreDashboard.costruisci(
+            catalogo = catalogoCorrente,
+            visti = visti,
+            personalizzazioni = personalizzazioni,
+            righeExtra = listOfNotNull(rigaNuoviEpisodi)
+        )
     }
 
     var chiaveDaFocalizzare by remember(catalogoCorrente) {
