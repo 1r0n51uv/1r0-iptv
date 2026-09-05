@@ -2,6 +2,8 @@ package com.ir0.iptv.app.content
 
 import android.util.JsonReader
 import android.util.JsonToken
+import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.classification.ContentClassifier
 import com.ir0.iptv.domain.classification.ContentType
 import com.ir0.iptv.domain.classification.SeriesGrouper

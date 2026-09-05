@@ -18,8 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ir0.iptv.app.content.ContentCard
-import com.ir0.iptv.app.content.ContentCatalog
+import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCatalog
 
 @Composable
 fun CanaliScreen(catalogo: ContentCatalog, activeIndex: Int, onSidebarClick: (Int) -> Unit, onCanaleClick: (ContentCard.Canale) -> Unit) {
