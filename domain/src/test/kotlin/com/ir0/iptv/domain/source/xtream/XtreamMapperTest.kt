@@ -2,6 +2,7 @@ package com.ir0.iptv.domain.source.xtream
 
 import com.ir0.iptv.domain.source.m3u.M3uEntry
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class XtreamMapperTest {
@@ -89,5 +90,45 @@ class XtreamMapperTest {
             "http://iptv.provider.example:8080/series/user1/pass1/101.mp4",
             serie.seasons[0].episodes[0].url
         )
+    }
+
+    @Test
+    fun `carries the per-episode image and the series plot when the provider exposes them`() {
+        val dto = XtreamSeriesInfoDto(
+            seriesName = "The Bear",
+            episodesBySeason = mapOf(
+                1 to listOf(
+                    XtreamEpisodeDto(
+                        id = 101,
+                        episodeNum = 1,
+                        title = "Sistemi",
+                        containerExtension = "mp4",
+                        immagine = "http://stills.example/s01e01.jpg"
+                    )
+                )
+            ),
+            cover = "http://logos.example/thebear.jpg",
+            plot = "Carmy torna a Chicago per gestire la trattoria di famiglia."
+        )
+
+        val serie = XtreamMapper().toSerie(dto, connection)
+
+        assertEquals("Carmy torna a Chicago per gestire la trattoria di famiglia.", serie.plot)
+        assertEquals("http://stills.example/s01e01.jpg", serie.seasons[0].episodes[0].immagine)
+    }
+
+    @Test
+    fun `an episode without its own image simply has none, and falls back to the Serie poster in the UI`() {
+        val dto = XtreamSeriesInfoDto(
+            seriesName = "The Bear",
+            episodesBySeason = mapOf(
+                1 to listOf(XtreamEpisodeDto(id = 101, episodeNum = 1, title = "Sistemi", containerExtension = "mp4"))
+            )
+        )
+
+        val serie = XtreamMapper().toSerie(dto, connection)
+
+        assertNull(serie.seasons[0].episodes[0].immagine)
+        assertNull(serie.plot)
     }
 }

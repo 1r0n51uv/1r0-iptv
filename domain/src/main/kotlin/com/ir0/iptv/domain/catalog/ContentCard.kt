@@ -17,7 +17,8 @@ sealed interface ContentCard {
     data class Canale(
         override val title: String,
         override val imageUrl: String?,
-        val streamUrl: String
+        val streamUrl: String,
+        val categoria: String? = null
     ) : ContentCard {
         override val chiaveIdentita: String get() = streamUrl
     }
@@ -25,7 +26,9 @@ sealed interface ContentCard {
     data class Film(
         override val title: String,
         override val imageUrl: String?,
-        val streamUrl: String
+        val streamUrl: String,
+        val categoria: String? = null,
+        val plot: String? = null
     ) : ContentCard {
         override val chiaveIdentita: String get() = streamUrl
     }

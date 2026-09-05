@@ -42,10 +42,15 @@ class XtreamMapper {
                         .map { episode ->
                             val url = "http://${connection.host}:${connection.port}/series/" +
                                 "${connection.username}/${connection.password}/${episode.id}.${episode.containerExtension}"
-                            Episodio(title = episode.title, url = url, episodeNumber = episode.episodeNum)
+                            Episodio(
+                                title = episode.title,
+                                url = url,
+                                episodeNumber = episode.episodeNum,
+                                immagine = episode.immagine
+                            )
                         }
                 )
             }
-        return Serie(name = dto.seriesName, seasons = seasons, poster = dto.cover)
+        return Serie(name = dto.seriesName, seasons = seasons, poster = dto.cover, plot = dto.plot)
     }
 }

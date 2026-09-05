@@ -29,11 +29,13 @@ data class XtreamEpisodeDto(
     val id: Int,
     val episodeNum: Int,
     val title: String,
-    val containerExtension: String
+    val containerExtension: String,
+    val immagine: String? = null
 )
 
 data class XtreamSeriesInfoDto(
     val seriesName: String,
     val episodesBySeason: Map<Int, List<XtreamEpisodeDto>>,
-    val cover: String? = null
+    val cover: String? = null,
+    val plot: String? = null
 )
