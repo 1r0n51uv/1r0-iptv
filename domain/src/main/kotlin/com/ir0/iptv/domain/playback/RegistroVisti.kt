@@ -3,10 +3,12 @@ package com.ir0.iptv.domain.playback
 private const val SOGLIA_COMPLETAMENTO = 0.95
 private const val POSIZIONE_MINIMA_MS = 15_000L
 
+const val MAX_VISTI = 200
+
 class RegistroVisti {
 
     fun registra(visti: List<Visto>, visto: Visto): List<Visto> =
-        listOf(visto) + visti.filterNot { it.chiaveIdentita == visto.chiaveIdentita }
+        (listOf(visto) + visti.filterNot { it.chiaveIdentita == visto.chiaveIdentita }).take(MAX_VISTI)
 
     fun completato(visto: Visto): Boolean =
         visto.durataMs > 0 && visto.posizioneMs >= visto.durataMs * SOGLIA_COMPLETAMENTO
