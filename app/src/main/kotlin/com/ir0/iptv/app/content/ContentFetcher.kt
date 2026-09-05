@@ -135,7 +135,8 @@ class ContentFetcher(
                         imageUrl = item.cover,
                         seriesId = item.seriesId,
                         connection = connection,
-                        plot = item.plot
+                        plot = item.plot,
+                        categoria = item.categoryName
                     )
                 }
         }
@@ -200,7 +201,13 @@ private fun xtreamApiUrl(connection: XtreamConnection, action: String): String =
     "http://${connection.host}:${connection.port}/player_api.php" +
         "?username=${connection.username}&password=${connection.password}&action=$action"
 
-private data class SeriesListItem(val seriesId: Int, val name: String, val cover: String?, val plot: String?)
+private data class SeriesListItem(
+    val seriesId: Int,
+    val name: String,
+    val cover: String?,
+    val plot: String?,
+    val categoryName: String?
+)
 
 private fun JsonReader.readLiveStreamDto(): XtreamLiveStreamDto {
     var name = ""
@@ -251,6 +258,7 @@ private fun JsonReader.readSeriesListItem(): SeriesListItem {
     var name = ""
     var cover: String? = null
     var plot: String? = null
+    var categoryName: String? = null
     beginObject()
     while (hasNext()) {
         when (nextName()) {
@@ -258,11 +266,12 @@ private fun JsonReader.readSeriesListItem(): SeriesListItem {
             "name" -> name = nextStringFlexible()
             "cover" -> cover = nextStringOrNull()
             "plot" -> plot = nextStringOrNull()
+            "category_name" -> categoryName = nextStringOrNull()
             else -> skipValue()
         }
     }
     endObject()
-    return SeriesListItem(seriesId, name, cover, plot)
+    return SeriesListItem(seriesId, name, cover, plot, categoryName)
 }
 
 private fun JsonReader.nextStringOrNull(): String? = when (peek()) {

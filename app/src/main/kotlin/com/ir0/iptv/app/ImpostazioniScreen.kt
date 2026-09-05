@@ -4,23 +4,31 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +82,25 @@ fun ImpostazioniScreen(
                     "Chiave configurata."
                 }
             )
+        }
+
+        Sezione("Ordine Home") {
+            val ordine = SezioneHome.daSalvato(impostazioni.ordineHome)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ordine.forEachIndexed { indice, sezione ->
+                    RigaOrdinamento(
+                        etichetta = sezione.etichetta,
+                        puoSalire = indice > 0,
+                        puoScendere = indice < ordine.lastIndex,
+                        onSu = {
+                            onCambia(impostazioni.copy(ordineHome = scambia(ordine, indice, indice - 1).map { it.name }))
+                        },
+                        onGiu = {
+                            onCambia(impostazioni.copy(ordineHome = scambia(ordine, indice, indice + 1).map { it.name }))
+                        }
+                    )
+                }
+            }
         }
 
         Sezione("Contenuto di default") {
@@ -132,6 +159,69 @@ private fun PastigliaColore(accento: Accento, scelto: Boolean, onClick: () -> Un
             fontWeight = if (scelto) FontWeight.SemiBold else FontWeight.Normal
         )
     }
+}
+
+@Composable
+private fun RigaOrdinamento(
+    etichetta: String,
+    puoSalire: Boolean,
+    puoScendere: Boolean,
+    onSu: () -> Unit,
+    onGiu: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .width(420.dp)
+            .background(Color(0xFF1A1D22), RoundedCornerShape(8.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = etichetta,
+            color = Color(0xFFF2F2F0),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
+        PulsanteFreccia(icona = Icons.Filled.KeyboardArrowUp, abilitato = puoSalire, onClick = onSu)
+        PulsanteFreccia(icona = Icons.Filled.KeyboardArrowDown, abilitato = puoScendere, onClick = onGiu)
+    }
+}
+
+@Composable
+private fun PulsanteFreccia(icona: ImageVector, abilitato: Boolean, onClick: () -> Unit) {
+    var infocato by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF262B33))
+            .then(
+                if (infocato && abilitato) {
+                    Modifier.border(2.dp, LocalAccento.current, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .onFocusChanged { infocato = it.isFocused }
+            .clickable(enabled = abilitato, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icona,
+            contentDescription = null,
+            tint = if (abilitato) Color(0xFF9AA0AA) else Color(0xFF3A3F48)
+        )
+    }
+}
+
+private fun scambia(lista: List<SezioneHome>, i: Int, j: Int): List<SezioneHome> {
+    if (j < 0 || j >= lista.size) return lista
+    val mutabile = lista.toMutableList()
+    mutabile[i] = lista[j]
+    mutabile[j] = lista[i]
+    return mutabile
 }
 
 @Composable

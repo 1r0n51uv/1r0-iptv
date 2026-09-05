@@ -2,6 +2,7 @@ package com.ir0.iptv.app.settings
 
 import android.content.Context
 import java.io.File
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class Impostazioni(
@@ -9,7 +10,9 @@ data class Impostazioni(
     val chiaveApiAi: String? = null,
     val chiaveApiSport: String? = null,
     val sportInDashboard: Boolean = false,
-    val accento: String? = null
+    val accento: String? = null,
+    /** Nomi di SezioneHome nell'ordine scelto dall'utente; null = ordine predefinito. */
+    val ordineHome: List<String>? = null
 )
 
 class ImpostazioniRepository(context: Context) {
@@ -25,7 +28,10 @@ class ImpostazioniRepository(context: Context) {
                 chiaveApiAi = oggetto.optStringOrNull("chiaveApiAi"),
                 chiaveApiSport = oggetto.optStringOrNull("chiaveApiSport"),
                 sportInDashboard = oggetto.optBoolean("sportInDashboard", false),
-                accento = oggetto.optStringOrNull("accento")
+                accento = oggetto.optStringOrNull("accento"),
+                ordineHome = oggetto.optJSONArray("ordineHome")?.let { array ->
+                    (0 until array.length()).map { array.getString(it) }
+                }
             )
         } catch (e: Exception) {
             Impostazioni()
@@ -41,6 +47,7 @@ class ImpostazioniRepository(context: Context) {
                 .put("chiaveApiSport", impostazioni.chiaveApiSport)
                 .put("sportInDashboard", impostazioni.sportInDashboard)
                 .put("accento", impostazioni.accento)
+                .put("ordineHome", impostazioni.ordineHome?.let { JSONArray(it) })
                 .toString()
         )
     }

@@ -272,6 +272,7 @@ private fun ContentScreen(
                             visti = visti,
                             chiaveDaFocalizzare = chiaveDaFocalizzare,
                             catalogoVuoto = catalogoCorrente.isEmpty,
+                            ordine = remember(impostazioni.ordineHome) { SezioneHome.daSalvato(impostazioni.ordineHome) },
                             sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }

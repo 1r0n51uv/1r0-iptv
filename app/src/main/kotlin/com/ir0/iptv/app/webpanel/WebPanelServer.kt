@@ -91,7 +91,8 @@ object WebPanelServer {
                             chiaveApiAi = params["chiaveApiAi"]?.ifBlank { null } ?: correnti.chiaveApiAi,
                             chiaveApiSport = params["chiaveApiSport"]?.ifBlank { null } ?: correnti.chiaveApiSport,
                             sportInDashboard = params["sportInDashboard"] == "on",
-                            accento = params["accento"]?.ifBlank { null } ?: correnti.accento
+                            accento = params["accento"]?.ifBlank { null } ?: correnti.accento,
+                            ordineHome = correnti.ordineHome
                         )
                     )
                     call.respondRedirect("/impostazioni")

@@ -43,10 +43,15 @@ sealed interface ContentCard {
     sealed interface SerieCard : ContentCard {
         override val chiaveIdentita: String get() = chiaveSerie(title)
 
+        /** Le Sorgenti M3U non hanno una categoria distinta dal nome della Serie (ADR 0002):
+         * resta null e la Serie cade nel gruppo "Altro" nelle schermate organizzate per categoria. */
+        val categoria: String?
+
         data class Pronta(
             override val title: String,
             override val imageUrl: String?,
-            val serie: Serie
+            val serie: Serie,
+            override val categoria: String? = null
         ) : SerieCard
 
         data class DaCaricare(
@@ -54,7 +59,8 @@ sealed interface ContentCard {
             override val imageUrl: String?,
             val seriesId: Int,
             val connection: XtreamConnection,
-            val plot: String? = null
+            val plot: String? = null,
+            override val categoria: String? = null
         ) : SerieCard
     }
 

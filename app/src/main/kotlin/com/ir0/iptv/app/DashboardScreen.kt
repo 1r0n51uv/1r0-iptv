@@ -37,6 +37,7 @@ fun DashboardScreen(
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
     catalogoVuoto: Boolean,
+    ordine: List<SezioneHome> = SezioneHome.ordinePredefinito,
     sport: List<PartitaConCanale> = emptyList(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
@@ -46,16 +47,17 @@ fun DashboardScreen(
         return
     }
 
+    val righePerTipo = remember(righe) { righe.associateBy { it.tipo } }
     val statoColonna = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
-    val indiceRigaDaFocalizzare = righe.indexOfFirst { riga ->
-        riga.contenuti.any { it.chiaveIdentita == chiaveDaFocalizzare }
+    val indiceSezioneDaFocalizzare = ordine.indexOfFirst { sezione ->
+        val tipo = tipoRigaDi(sezione) ?: return@indexOfFirst false
+        righePerTipo[tipo]?.contenuti?.any { it.chiaveIdentita == chiaveDaFocalizzare } == true
     }
 
-    LaunchedEffect(chiaveDaFocalizzare, righe) {
-        if (indiceRigaDaFocalizzare >= 0) {
-            // +1: la fascia sport occupa il primo posto nella LazyColumn.
-            statoColonna.scrollToItem(indiceRigaDaFocalizzare + 1)
+    LaunchedEffect(chiaveDaFocalizzare, righe, ordine) {
+        if (indiceSezioneDaFocalizzare >= 0) {
+            statoColonna.scrollToItem(indiceSezioneDaFocalizzare)
             // La card puo' non essere ancora attaccata: in quel caso resta il focus di default.
             runCatching { focusRequester.requestFocus() }
         }
@@ -69,22 +71,33 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-        item {
-            FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
-        }
-        items(righe) { riga ->
-            RigaContenuti(
-                titolo = titoloDi(riga.tipo),
-                contenuti = riga.contenuti,
-                visti = visti,
-                chiaveDaFocalizzare = chiaveDaFocalizzare,
-                focusRequester = focusRequester,
-                onClick = onContenutoClick,
-                onLongClick = onContenutoLongClick,
-                messaggioVuoto = messaggioVuotoDi(riga.tipo)
-            )
+        items(ordine) { sezione ->
+            if (sezione == SezioneHome.SPORT) {
+                FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
+            } else {
+                val tipo = tipoRigaDi(sezione)!!
+                val riga = righePerTipo[tipo] ?: RigaDashboard(tipo, emptyList())
+                RigaContenuti(
+                    titolo = sezione.etichetta,
+                    contenuti = riga.contenuti,
+                    visti = visti,
+                    chiaveDaFocalizzare = chiaveDaFocalizzare,
+                    focusRequester = focusRequester,
+                    onClick = onContenutoClick,
+                    onLongClick = onContenutoLongClick,
+                    messaggioVuoto = messaggioVuotoDi(tipo)
+                )
+            }
         }
     }
+}
+
+private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
+    SezioneHome.SPORT -> null
+    SezioneHome.CONTINUA -> TipoRiga.CONTINUA
+    SezioneHome.NUOVI_EPISODI -> TipoRiga.NUOVI_EPISODI
+    SezioneHome.SUGGERITI -> TipoRiga.SUGGERITI
+    SezioneHome.PREFERITI -> TipoRiga.PREFERITI
 }
 
 @Composable
@@ -164,13 +177,6 @@ fun SchermataVuota(messaggio: String) {
     ) {
         Text(text = messaggio, color = Color(0xFF9AA0AA), fontSize = 16.sp)
     }
-}
-
-private fun titoloDi(tipo: TipoRiga): String = when (tipo) {
-    TipoRiga.CONTINUA -> "Continua a guardare"
-    TipoRiga.NUOVI_EPISODI -> "Nuovi episodi"
-    TipoRiga.SUGGERITI -> "Suggeriti"
-    TipoRiga.PREFERITI -> "Preferiti"
 }
 
 private fun messaggioVuotoDi(tipo: TipoRiga): String = when (tipo) {
