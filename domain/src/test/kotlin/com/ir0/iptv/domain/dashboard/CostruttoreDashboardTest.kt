@@ -76,6 +76,21 @@ class CostruttoreDashboardTest {
     }
 
     @Test
+    fun `extra rows like Nuovi episodi sit between continue watching and Preferiti`() {
+        val righe = costruttore.costruisci(
+            catalogo,
+            listOf(visto(dune.chiaveIdentita, TipoVisto.FILM)),
+            mapOf(rai1.chiaveIdentita to ContentCustomization(favorite = true)),
+            righeExtra = listOf(RigaDashboard(TipoRiga.NUOVI_EPISODI, listOf(bear)))
+        )
+
+        assertEquals(
+            listOf(TipoRiga.CONTINUA, TipoRiga.NUOVI_EPISODI, TipoRiga.PREFERITI),
+            righe.map { it.tipo }.take(3)
+        )
+    }
+
+    @Test
     fun `continue watching comes before Preferiti, which comes before the catalog rows`() {
         val righe = costruttore.costruisci(
             catalogo,
