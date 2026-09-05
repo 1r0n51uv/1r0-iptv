@@ -32,7 +32,10 @@ sealed interface ContentCard {
         override val imageUrl: String?,
         val streamUrl: String,
         val categoria: String? = null,
-        val plot: String? = null
+        val plot: String? = null,
+        /** Presente solo per i Film Xtream: permette di caricare i dettagli estesi (cast,
+         * regista, durata...) da get_vod_info. */
+        val xtream: RiferimentoXtream? = null
     ) : ContentCard {
         override val chiaveIdentita: String get() = streamUrl
     }

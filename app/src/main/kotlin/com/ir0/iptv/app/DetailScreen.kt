@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +19,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +54,7 @@ import coil.compose.AsyncImage
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.DettaglioEsteso
 import com.ir0.iptv.domain.classification.Episodio
 import com.ir0.iptv.domain.classification.Serie
 import com.ir0.iptv.domain.classification.Stagione
@@ -115,6 +125,11 @@ private fun DettaglioFilm(
     val posizione = registro.posizioneDiRipresa(visti, card.chiaveIdentita)
     val percentuale = registro.percentuale(visti, card.chiaveIdentita)
 
+    var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
+    LaunchedEffect(card) {
+        dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+    }
+
     Pagina {
         Testata(
             copertina = card.imageUrl,
@@ -122,7 +137,8 @@ private fun DettaglioFilm(
             coloreEtichetta = Color(0xFF3B82F6),
             titolo = card.title,
             meta = card.categoria,
-            plot = card.plot
+            plot = card.plot,
+            dettagli = dettagli
         ) {
             PulsanteAzione(
                 testo = posizione?.let { "Riprendi da ${durata(it)}" } ?: "Riproduci",
@@ -238,6 +254,7 @@ private fun Pagina(contenuto: @Composable () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xFF14161A))
+                    .verticalScroll(rememberScrollState())
                     .padding(36.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -255,6 +272,7 @@ private fun Testata(
     titolo: String,
     meta: String?,
     plot: String?,
+    dettagli: DettaglioEsteso? = null,
     azioni: @Composable () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
@@ -298,8 +316,43 @@ private fun Testata(
                     modifier = Modifier.width(640.dp)
                 )
             }
+            if (dettagli != null && !dettagli.isEmpty) {
+                DettagliEstesi(dettagli)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { azioni() }
         }
+    }
+}
+
+@Composable
+private fun DettagliEstesi(dettagli: DettaglioEsteso) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val riepilogo = listOfNotNull(
+            dettagli.anno,
+            dettagli.durata,
+            dettagli.valutazione?.let { "★ %.1f".format(it) }
+        ).joinToString(" · ")
+        if (riepilogo.isNotBlank()) {
+            Text(text = riepilogo, color = Color(0xFF9AA0AA), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        dettagli.regista?.let { RigaMetaEstesa("Regia", it) }
+        dettagli.cast?.let { RigaMetaEstesa("Cast", it) }
+        dettagli.genere?.let { RigaMetaEstesa("Genere", it) }
+    }
+}
+
+@Composable
+private fun RigaMetaEstesa(etichetta: String, valore: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = "$etichetta:", color = Color(0xFF6D7380), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = valore,
+            color = Color(0xFFC7CAD0),
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(520.dp)
+        )
     }
 }
 
@@ -316,7 +369,10 @@ private fun PulsanteAzione(testo: String, principale: Boolean = false, onClick: 
         color = if (principale) Color(0xFF14161A) else Color(0xFFF2F2F0),
         fontSize = 14.sp,
         fontWeight = if (principale) FontWeight.Bold else FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
+            .widthIn(max = 420.dp)
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
             .background(sfondo, RoundedCornerShape(8.dp))
@@ -342,28 +398,54 @@ private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
     )
 }
 
+private fun nomeStagione(stagione: Stagione): String = stagione.number?.let { "Stagione $it" } ?: "Altri episodi"
+
 @Composable
 private fun SelettoreStagioni(
     stagioni: List<Stagione>,
     selezionata: Stagione?,
     onSeleziona: (Stagione) -> Unit
 ) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(stagioni) { stagione ->
-            val attiva = stagione.number == selezionata?.number
+    var espanso by remember { mutableStateOf(false) }
+    var infocato by remember { mutableStateOf(false) }
+    val accento = LocalAccento.current
+
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .onFocusChanged { infocato = it.isFocused }
+                .clickable { espanso = true }
+                .background(Color(0xFF1F232A), RoundedCornerShape(8.dp))
+                .border(2.dp, if (infocato || espanso) accento else Color.Transparent, RoundedCornerShape(8.dp))
+                .padding(horizontal = 16.dp, vertical = 9.dp)
+        ) {
             Text(
-                text = stagione.number?.let { "Stagione $it" } ?: "Altri episodi",
-                color = if (attiva) Color(0xFF14161A) else Color(0xFFC7CAD0),
+                text = selezionata?.let { nomeStagione(it) } ?: "Stagioni",
+                color = Color(0xFFF2F2F0),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clickable { onSeleziona(stagione) }
-                    .background(
-                        if (attiva) LocalAccento.current else Color(0xFF1F232A),
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
+                fontWeight = FontWeight.SemiBold
             )
+            Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color(0xFF9AA0AA))
+        }
+        MaterialTheme(colorScheme = darkColorScheme(surface = Color(0xFF1F232A), onSurface = Color(0xFFF2F2F0))) {
+            DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
+                stagioni.forEach { stagione ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = nomeStagione(stagione),
+                                color = if (stagione.number == selezionata?.number) accento else Color(0xFFF2F2F0)
+                            )
+                        },
+                        onClick = {
+                            onSeleziona(stagione)
+                            espanso = false
+                        }
+                    )
+                }
+            }
         }
     }
 }

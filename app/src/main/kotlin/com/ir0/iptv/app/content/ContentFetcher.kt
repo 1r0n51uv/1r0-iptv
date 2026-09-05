@@ -5,6 +5,7 @@ import android.util.JsonReader
 import android.util.JsonToken
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.DettaglioEsteso
 import com.ir0.iptv.domain.catalog.RiferimentoXtream
 import com.ir0.iptv.domain.classification.ContentClassifier
 import com.ir0.iptv.domain.classification.ContentType
@@ -67,6 +68,15 @@ class ContentFetcher(
             }
         }
 
+    /** Dettagli estesi di un Film Xtream (cast, regista, durata...); le Sorgenti M3U non li
+     * espongono, quindi il Dettaglio mostra solo la trama gia' nel catalogo. */
+    suspend fun dettaglioFilm(riferimento: RiferimentoXtream): DettaglioEsteso? = withContext(Dispatchers.IO) {
+        tryOrNull {
+            val url = xtreamApiUrl(riferimento.connection, "get_vod_info") + "&vod_id=${riferimento.streamId}"
+            JSONObject(scarica(url)).optJSONObject("info")?.toDettaglioEsteso()
+        }
+    }
+
     /** Palinsesto di un Canale Xtream; le Sorgenti M3U non espongono un EPG (vedi ADR 0002). */
     suspend fun palinsesto(riferimento: RiferimentoXtream): List<Programma> = withContext(Dispatchers.IO) {
         tryOrNull {
@@ -111,7 +121,8 @@ class ContentFetcher(
                         imageUrl = movie.poster,
                         streamUrl = movie.url,
                         categoria = movie.categoryName,
-                        plot = movie.plot
+                        plot = movie.plot,
+                        xtream = RiferimentoXtream(dto.streamId, connection)
                     )
                 }
         }
@@ -320,3 +331,26 @@ private fun String.decodificaBase64(): String = try {
 
 private fun JSONObject.optStringOrNull(key: String): String? =
     if (has(key) && !isNull(key)) getString(key) else null
+
+/** Xtream non concorda su quali campi mette in get_vod_info ne' sul loro formato: si prende
+ * quel che c'e' senza pretendere una forma precisa, cosi' un provider "povero" mostra solo i
+ * campi che ha invece di far sparire tutta la Testata del Dettaglio. */
+private fun JSONObject.toDettaglioEsteso(): DettaglioEsteso {
+    val durataSecondi = optStringOrNull("duration_secs")?.toLongOrNull()
+    return DettaglioEsteso(
+        genere = optStringOrNull("genre")?.takeIf { it.isNotBlank() },
+        cast = optStringOrNull("cast")?.takeIf { it.isNotBlank() },
+        regista = optStringOrNull("director")?.takeIf { it.isNotBlank() },
+        durata = optStringOrNull("duration")?.takeIf { it.isNotBlank() }
+            ?: durataSecondi?.let { formattaDurata(it) },
+        anno = optStringOrNull("releasedate")?.takeIf { it.length >= 4 }?.take(4)
+            ?: optStringOrNull("release_date")?.takeIf { it.length >= 4 }?.take(4),
+        valutazione = optStringOrNull("rating")?.toDoubleOrNull()?.takeIf { it > 0 }
+    )
+}
+
+private fun formattaDurata(secondi: Long): String {
+    val ore = secondi / 3600
+    val minuti = (secondi % 3600) / 60
+    return if (ore > 0) "${ore}h ${minuti}min" else "${minuti}min"
+}
