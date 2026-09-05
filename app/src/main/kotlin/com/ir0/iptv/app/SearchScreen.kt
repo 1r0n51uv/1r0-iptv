@@ -30,17 +30,21 @@ import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.ElencoPreferiti
 import com.ir0.iptv.domain.catalog.RicercaCatalogo
+import com.ir0.iptv.domain.customization.ContentCustomization
 import com.ir0.iptv.domain.playback.RegistroVisti
 import com.ir0.iptv.domain.playback.Visto
 
 private val ricerca = RicercaCatalogo()
 private val registro = RegistroVisti()
+private val elencoPreferiti = ElencoPreferiti()
 
 @Composable
 fun SearchScreen(
     catalogo: ContentCatalog,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -107,6 +111,7 @@ fun SearchScreen(
                         titolo = "Canali",
                         contenuti = canali,
                         visti = visti,
+                        personalizzazioni = personalizzazioni,
                         chiaveDaFocalizzare = null,
                         focusRequester = null,
                         onClick = onContenutoClick,
@@ -118,6 +123,7 @@ fun SearchScreen(
                         titolo = "Film",
                         contenuti = film,
                         visti = visti,
+                        personalizzazioni = personalizzazioni,
                         chiaveDaFocalizzare = null,
                         focusRequester = null,
                         onClick = onContenutoClick,
@@ -129,6 +135,7 @@ fun SearchScreen(
                         titolo = "Serie",
                         contenuti = serie,
                         visti = visti,
+                        personalizzazioni = personalizzazioni,
                         chiaveDaFocalizzare = null,
                         focusRequester = null,
                         onClick = onContenutoClick,
@@ -144,6 +151,7 @@ fun SearchScreen(
 fun GrigliaContenuti(
     contenuti: List<ContentCard>,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onClick: (ContentCard) -> Unit,
     onLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -157,6 +165,7 @@ fun GrigliaContenuti(
             CardContenuto(
                 card = card,
                 percentuale = registro.percentuale(visti, card.chiaveIdentita),
+                preferito = elencoPreferiti.preferito(personalizzazioni, card),
                 onClick = { onClick(card) },
                 onLongClick = { onLongClick(card) }
             )

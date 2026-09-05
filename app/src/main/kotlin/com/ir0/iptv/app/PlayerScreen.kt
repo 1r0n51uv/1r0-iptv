@@ -1,18 +1,30 @@
 package com.ir0.iptv.app
 
 import android.view.ViewGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -26,6 +38,7 @@ import kotlinx.coroutines.launch
 private const val INTERVALLO_SALVATAGGIO_MS = 10_000L
 private const val RITENTATIVI_MASSIMI_ERRORE = 5
 private const val ATTESA_RITENTATIVO_MS = 1_000L
+private const val DURATA_TITOLO_MS = 5_000L
 
 @Composable
 fun PlayerScreen(
@@ -45,6 +58,12 @@ fun PlayerScreen(
     }
 
     val tracciaProgresso = richiesta.tipo != null
+
+    var mostraTitolo by remember(richiesta.streamUrl) { mutableStateOf(true) }
+    LaunchedEffect(richiesta.streamUrl) {
+        delay(DURATA_TITOLO_MS)
+        mostraTitolo = false
+    }
 
     if (tracciaProgresso) {
         LaunchedEffect(exoPlayer) {
@@ -99,6 +118,20 @@ fun PlayerScreen(
                         }
                     }
                 )
+                if (mostraTitolo) {
+                    Text(
+                        text = richiesta.titolo,
+                        color = Color(0xFFF2F2F0),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(24.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x99000000))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
             }
         }
     }

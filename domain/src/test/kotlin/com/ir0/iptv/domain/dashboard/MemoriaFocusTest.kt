@@ -14,52 +14,56 @@ class MemoriaFocusTest {
     private val dune = ContentCard.Film("Dune", null, "http://example.com/dune.mp4")
     private val simpson = ContentCard.SerieCard.Pronta("I Simpson", null, Serie("I Simpson", emptyList()))
     private val righe = listOf(
-        RigaDashboard(TipoRiga.CONTINUA, listOf(rai1)),
-        RigaDashboard(TipoRiga.NUOVI_EPISODI, listOf(dune)),
+        RigaDashboard(TipoRiga.CONTINUA, listOf(dune)),
+        RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList()),
         RigaDashboard(TipoRiga.PREFERITI, listOf(simpson))
     )
 
     @Test
-    fun `on a cold start the focus goes back to the last content it was on`() {
-        val chiave = memoria.focusIniziale(righe, ultimaChiave = dune.chiaveIdentita, contenutoDiDefault = null)
+    fun `on a cold start the focus goes to the content to resume`() {
+        val chiave = memoria.focusIniziale(righe, contenutoDiDefault = simpson.chiaveIdentita)
 
         assertEquals(dune.chiaveIdentita, chiave)
     }
 
     @Test
-    fun `without any history the focus goes to the Contenuto di default`() {
-        val chiave = memoria.focusIniziale(righe, ultimaChiave = null, contenutoDiDefault = simpson.chiaveIdentita)
+    fun `without anything to resume the focus goes to the Contenuto di default`() {
+        val righeSenzaContinua = listOf(
+            RigaDashboard(TipoRiga.CONTINUA, emptyList()),
+            RigaDashboard(TipoRiga.PREFERITI, listOf(simpson))
+        )
+
+        val chiave = memoria.focusIniziale(righeSenzaContinua, contenutoDiDefault = simpson.chiaveIdentita)
 
         assertEquals(simpson.chiaveIdentita, chiave)
     }
 
     @Test
-    fun `with neither history nor default the focus goes to the first content of the first row`() {
-        val chiave = memoria.focusIniziale(righe, ultimaChiave = null, contenutoDiDefault = null)
-
-        assertEquals(rai1.chiaveIdentita, chiave)
-    }
-
-    @Test
-    fun `a remembered content that is no longer in the catalog falls back to the default`() {
-        val chiave = memoria.focusIniziale(
-            righe,
-            ultimaChiave = "http://example.com/sparito.mp4",
-            contenutoDiDefault = simpson.chiaveIdentita
+    fun `with nothing to resume and no default the focus goes to the first content of the first row`() {
+        val righeSenzaContinua = listOf(
+            RigaDashboard(TipoRiga.CONTINUA, emptyList()),
+            RigaDashboard(TipoRiga.PREFERITI, listOf(simpson))
         )
+
+        val chiave = memoria.focusIniziale(righeSenzaContinua, contenutoDiDefault = null)
 
         assertEquals(simpson.chiaveIdentita, chiave)
     }
 
     @Test
     fun `a Contenuto di default that is no longer in the catalog falls back to the first content`() {
-        val chiave = memoria.focusIniziale(righe, ultimaChiave = null, contenutoDiDefault = "serie:Sparita")
+        val righeSenzaContinua = listOf(
+            RigaDashboard(TipoRiga.CONTINUA, emptyList()),
+            RigaDashboard(TipoRiga.PREFERITI, listOf(simpson))
+        )
 
-        assertEquals(rai1.chiaveIdentita, chiave)
+        val chiave = memoria.focusIniziale(righeSenzaContinua, contenutoDiDefault = "serie:Sparita")
+
+        assertEquals(simpson.chiaveIdentita, chiave)
     }
 
     @Test
     fun `with no rows there is nothing to focus`() {
-        assertNull(memoria.focusIniziale(emptyList(), ultimaChiave = null, contenutoDiDefault = null))
+        assertNull(memoria.focusIniziale(emptyList(), contenutoDiDefault = null))
     }
 }

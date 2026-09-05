@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.customization.ContentCustomization
 import com.ir0.iptv.domain.playback.Visto
 
 @Composable
@@ -20,6 +21,7 @@ fun SportScreen(
     catalogo: ContentCatalog,
     partite: List<PartitaConCanale>,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -51,6 +53,7 @@ fun SportScreen(
                     titolo = "Canali Sport",
                     contenuti = canaliSport,
                     visti = visti,
+                    personalizzazioni = personalizzazioni,
                     chiaveDaFocalizzare = null,
                     focusRequester = null,
                     onClick = onContenutoClick,

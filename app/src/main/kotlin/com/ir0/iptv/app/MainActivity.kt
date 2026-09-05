@@ -49,7 +49,6 @@ import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
 import com.ir0.iptv.app.playback.VistoRepository
-import com.ir0.iptv.app.session.StatoSessioneRepository
 import com.ir0.iptv.app.settings.Impostazioni
 import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.app.sport.PartitaConCanale
@@ -90,7 +89,6 @@ class MainActivity : ComponentActivity() {
         val sorgenteRepository = SorgenteRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
-        val statoSessioneRepository = StatoSessioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
         val suggerimentiAi = SuggerimentiAi()
@@ -111,7 +109,6 @@ class MainActivity : ComponentActivity() {
                     sorgenti = sorgenti,
                     vistoRepository = vistoRepository,
                     personalizzazioneRepository = personalizzazioneRepository,
-                    statoSessioneRepository = statoSessioneRepository,
                     impostazioniRepository = impostazioniRepository,
                     nuoviEpisodi = nuoviEpisodi,
                     suggerimentiAi = suggerimentiAi,
@@ -127,7 +124,6 @@ private fun ContentScreen(
     sorgenti: List<Sorgente>,
     vistoRepository: VistoRepository,
     personalizzazioneRepository: PersonalizzazioneRepository,
-    statoSessioneRepository: StatoSessioneRepository,
     impostazioniRepository: ImpostazioniRepository,
     nuoviEpisodi: NuoviEpisodi,
     suggerimentiAi: SuggerimentiAi,
@@ -201,7 +197,6 @@ private fun ContentScreen(
         mutableStateOf(
             memoriaFocus.focusIniziale(
                 righe = righe,
-                ultimaChiave = statoSessioneRepository.ultimaChiave(),
                 contenutoDiDefault = impostazioniRepository.leggi().contenutoDiDefault
             )
         )
@@ -209,7 +204,6 @@ private fun ContentScreen(
 
     fun apri(card: ContentCard) {
         chiaveDaFocalizzare = card.chiaveIdentita
-        statoSessioneRepository.salvaUltimaChiave(card.chiaveIdentita)
         sovrapposte = sovrapposte + when (card) {
             is ContentCard.Canale -> Screen.Player(card.toRichiesta(), 0L)
             else -> Screen.Detail(card)
@@ -270,8 +264,10 @@ private fun ContentScreen(
                         Destinazione.DASHBOARD -> DashboardScreen(
                             righe = righe,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             chiaveDaFocalizzare = chiaveDaFocalizzare,
                             catalogoVuoto = catalogoCorrente.isEmpty,
+                            contenutoDiDefault = impostazioni.contenutoDiDefault,
                             ordine = remember(impostazioni.ordineHome) { SezioneHome.daSalvato(impostazioni.ordineHome) },
                             sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
@@ -281,6 +277,7 @@ private fun ContentScreen(
                         Destinazione.CANALI -> CanaliScreen(
                             catalogo = catalogoCorrente,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
@@ -288,6 +285,7 @@ private fun ContentScreen(
                         Destinazione.FILM -> FilmScreen(
                             catalogo = catalogoCorrente,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
@@ -295,6 +293,7 @@ private fun ContentScreen(
                         Destinazione.SERIE -> SerieScreen(
                             catalogo = catalogoCorrente,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
@@ -308,6 +307,7 @@ private fun ContentScreen(
                             catalogo = catalogoCorrente,
                             partite = partiteInEvidenza,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
@@ -315,6 +315,7 @@ private fun ContentScreen(
                         Destinazione.CERCA -> SearchScreen(
                             catalogo = catalogoCorrente,
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
@@ -322,6 +323,7 @@ private fun ContentScreen(
                         Destinazione.PREFERITI -> FavoritesScreen(
                             preferiti = elencoPreferiti.preferiti(catalogoCorrente, personalizzazioni),
                             visti = visti,
+                            personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )

@@ -18,14 +18,14 @@ trade-off reale dietro sono in [`docs/adr/`](docs/adr/).
 - [x] **Carousel episodi**: card per Stagione con barra di avanzamento, al posto della lista verticale.
 - [x] **Immagine per-episodio**: catturata da Xtream quando il provider la espone; le Sorgenti M3U ripiegano sul poster della Serie.
 - [x] **Riproduci con**: pressione lunga su una card, o pulsante sul Dettaglio, per aprire lo stream in un player esterno.
-- [x] **Nome del canale nel player**: overlay rimosso per tutti i contenuti. Se alla prova sulla TV il nome manca quando si cambia canale, il posto dove rimetterlo (magari a scomparsa) è `PlayerScreen`.
+- [x] **Nome del contenuto nel player**: overlay in alto a sinistra all'apertura, sparisce da solo dopo 5 secondi (`PlayerScreen`).
 
 ## Fase 3 — Sidebar e Dashboard
 
 - [x] **Sidebar**: navigazione persistente verso Dashboard, Guida TV, Sfoglia, Cerca, Preferiti e Impostazioni.
 - [x] **Dashboard**: schermata di atterraggio al posto della Home, apre con Continua a guardare; le righe vuote non compaiono.
 - [x] **Sfoglia, Cerca e Preferiti**: le tre schermate di catalogo, raggiungibili dalla Sidebar.
-- [x] **Memoria del focus**: all'avvio il focus torna sull'ultimo contenuto aperto (ripiego: Contenuto di default, poi la prima card); tornando da Dettaglio o player si ritrova la card di partenza.
+- [x] **Memoria del focus**: all'avvio il focus va sempre sulla banda Riprendi/Continua a guardare (ripiego: Contenuto di default, poi la prima card); tornando da Dettaglio o player si ritrova la card di partenza.
 - [x] **Contenuto selezionato alla chiusura**: l'app ricorda contenuto e posizione e riprende al riavvio, senza riproduzione in background.
 
 ## Fase 4 — Nuovi episodi e Suggerimenti

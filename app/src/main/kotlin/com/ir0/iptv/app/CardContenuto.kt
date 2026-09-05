@@ -12,9 +12,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,24 +40,35 @@ import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import com.ir0.iptv.domain.catalog.ContentCard
 
+private val LARGHEZZA_CARD_ORIZZONTALE = 200.dp
+private val ALTEZZA_CARD_ORIZZONTALE = 112.dp
+private val LARGHEZZA_CARD_VERTICALE = 148.dp
+private val ALTEZZA_CARD_VERTICALE = 210.dp
+
+/** Canali restano in landscape (frame TV); Film e Serie usano la locandina in verticale. */
+private val ContentCard.locandinaVerticale: Boolean get() = this !is ContentCard.Canale
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CardContenuto(
     card: ContentCard,
     percentuale: Int = 0,
+    preferito: Boolean = false,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {}
 ) {
     var infocata by remember { mutableStateOf(false) }
+    val larghezza = if (card.locandinaVerticale) LARGHEZZA_CARD_VERTICALE else LARGHEZZA_CARD_ORIZZONTALE
+    val altezza = if (card.locandinaVerticale) ALTEZZA_CARD_VERTICALE else ALTEZZA_CARD_ORIZZONTALE
     Column(
-        modifier = Modifier.width(200.dp),
+        modifier = Modifier.width(larghezza),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             modifier = Modifier
-                .width(200.dp)
-                .height(112.dp)
+                .width(larghezza)
+                .height(altezza)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { infocata = it.isFocused }
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -73,6 +88,24 @@ fun CardContenuto(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+            }
+            if (preferito) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = "Preferito",
+                        tint = LocalAccento.current,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
             if (percentuale > 0) {
                 Box(
@@ -97,7 +130,7 @@ fun CardContenuto(
             text = card.title,
             color = if (infocata) LocalAccento.current else Color(0xFFF2F2F0),
             fontSize = 14.sp,
-            maxLines = 1,
+            maxLines = if (card.locandinaVerticale) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )

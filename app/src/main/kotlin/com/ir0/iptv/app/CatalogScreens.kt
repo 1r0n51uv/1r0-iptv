@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.customization.ContentCustomization
 import com.ir0.iptv.domain.playback.Visto
 
 private const val CATEGORIA_ALTRO = "Altro"
@@ -26,16 +27,18 @@ private const val CATEGORIA_ALTRO = "Altro"
 fun CanaliScreen(
     catalogo: ContentCatalog,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
-    SchermataCategoria("Canali", catalogo.canali, visti, onContenutoClick, onContenutoLongClick)
+    SchermataCategoria("Canali", catalogo.canali, visti, personalizzazioni, onContenutoClick, onContenutoLongClick)
 }
 
 @Composable
 fun FilmScreen(
     catalogo: ContentCatalog,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -44,6 +47,7 @@ fun FilmScreen(
         contenuti = catalogo.film,
         categoriaDi = { it.categoria },
         visti = visti,
+        personalizzazioni = personalizzazioni,
         onClick = onContenutoClick,
         onLongClick = onContenutoLongClick
     )
@@ -53,6 +57,7 @@ fun FilmScreen(
 fun SerieScreen(
     catalogo: ContentCatalog,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -62,6 +67,7 @@ fun SerieScreen(
         categoriaDi = { it.categoria },
         categoriaDiRipiego = "Serie TV",
         visti = visti,
+        personalizzazioni = personalizzazioni,
         onClick = onContenutoClick,
         onLongClick = onContenutoLongClick
     )
@@ -72,6 +78,7 @@ private fun SchermataCategoria(
     titolo: String,
     contenuti: List<ContentCard>,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization>,
     onClick: (ContentCard) -> Unit,
     onLongClick: (ContentCard) -> Unit
 ) {
@@ -90,6 +97,7 @@ private fun SchermataCategoria(
         GrigliaContenuti(
             contenuti = contenuti,
             visti = visti,
+            personalizzazioni = personalizzazioni,
             onClick = onClick,
             onLongClick = onLongClick
         )
@@ -105,6 +113,7 @@ private fun <T : ContentCard> SchermataOrganizzataPerCategoria(
     contenuti: List<T>,
     categoriaDi: (T) -> String?,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization>,
     onClick: (ContentCard) -> Unit,
     onLongClick: (ContentCard) -> Unit,
     categoriaDiRipiego: String = CATEGORIA_ALTRO
@@ -142,6 +151,7 @@ private fun <T : ContentCard> SchermataOrganizzataPerCategoria(
                     titolo = categoria,
                     contenuti = contenutiCategoria,
                     visti = visti,
+                    personalizzazioni = personalizzazioni,
                     chiaveDaFocalizzare = null,
                     focusRequester = null,
                     onClick = onClick,

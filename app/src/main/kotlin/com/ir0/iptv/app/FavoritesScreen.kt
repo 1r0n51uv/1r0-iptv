@@ -13,12 +13,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.customization.ContentCustomization
 import com.ir0.iptv.domain.playback.Visto
 
 @Composable
 fun FavoritesScreen(
     preferiti: List<ContentCard>,
     visti: List<Visto>,
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     onContenutoClick: (ContentCard) -> Unit,
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
@@ -37,6 +39,7 @@ fun FavoritesScreen(
         GrigliaContenuti(
             contenuti = preferiti,
             visti = visti,
+            personalizzazioni = personalizzazioni,
             onClick = onContenutoClick,
             onLongClick = onContenutoLongClick
         )
