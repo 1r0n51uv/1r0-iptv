@@ -28,6 +28,8 @@ import com.ir0.iptv.app.theme.LocalAccento
 fun Sidebar(
     selezionata: Destinazione,
     onSeleziona: (Destinazione) -> Unit,
+    inAggiornamento: Boolean = false,
+    onAggiorna: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -47,23 +49,34 @@ fun Sidebar(
         )
         Destinazione.entries.forEach { destinazione ->
             VoceSidebar(
-                destinazione = destinazione,
+                etichetta = destinazione.etichetta,
                 attiva = destinazione == selezionata,
                 onClick = { onSeleziona(destinazione) }
             )
         }
+        VoceSidebar(
+            etichetta = if (inAggiornamento) "Aggiornamento…" else "Aggiorna catalogo",
+            attiva = false,
+            onClick = { if (!inAggiornamento) onAggiorna() },
+            modifier = Modifier.padding(top = 18.dp)
+        )
     }
 }
 
 @Composable
-private fun VoceSidebar(destinazione: Destinazione, attiva: Boolean, onClick: () -> Unit) {
+private fun VoceSidebar(
+    etichetta: String,
+    attiva: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var infocata by remember { mutableStateOf(false) }
     Text(
-        text = destinazione.etichetta,
+        text = etichetta,
         color = if (attiva) Color(0xFF14161A) else Color(0xFFC7CAD0),
         fontSize = 15.sp,
         fontWeight = if (attiva) FontWeight.Bold else FontWeight.Medium,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
