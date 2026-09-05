@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ir0.iptv.app.content.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.domain.classification.Episodio
 import com.ir0.iptv.domain.classification.Serie

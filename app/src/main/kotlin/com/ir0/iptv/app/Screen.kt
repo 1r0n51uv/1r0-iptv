@@ -1,6 +1,6 @@
 package com.ir0.iptv.app
 
-import com.ir0.iptv.app.content.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 
 sealed interface Screen {
