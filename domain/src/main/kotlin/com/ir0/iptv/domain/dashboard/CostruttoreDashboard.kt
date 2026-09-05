@@ -37,11 +37,13 @@ class CostruttoreDashboard(
     private fun continua(catalogo: ContentCatalog, visti: List<Visto>): List<ContentCard> =
         registro.continuaAGuardare(visti).mapNotNull { visto -> cardDi(catalogo, visto) }
 
-    /** Un Episodio ripreso si mostra come la sua Serie: e' li' che si sceglie da dove ripartire. */
+    /** Un Episodio ripreso si mostra come la sua Serie: e' li' che si sceglie da dove ripartire.
+     * La card pero' porta l'immagine dell'Episodio ripreso quando c'e', non la locandina. */
     private fun cardDi(catalogo: ContentCatalog, visto: Visto): ContentCard? = when (visto.tipo) {
         TipoVisto.FILM -> catalogo.film.firstOrNull { it.chiaveIdentita == visto.chiaveIdentita }
         TipoVisto.EPISODIO -> visto.serie?.let { nome ->
             catalogo.serie.firstOrNull { it.chiaveIdentita == ContentCard.chiaveSerie(nome) }
+                ?.conImmagineDiEpisodio(listOf(visto.chiaveIdentita))
         }
     }
 }

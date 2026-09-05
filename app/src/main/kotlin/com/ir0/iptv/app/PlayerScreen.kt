@@ -44,7 +44,10 @@ private const val DURATA_TITOLO_MS = 5_000L
 fun PlayerScreen(
     richiesta: RichiestaRiproduzione,
     posizioneIniziale: Long = 0,
-    onProgresso: (posizioneMs: Long, durataMs: Long) -> Unit = { _, _ -> }
+    onProgresso: (posizioneMs: Long, durataMs: Long) -> Unit = { _, _ -> },
+    /** Chiamato quando la riproduzione arriva in fondo: chi ascolta fa partire il prossimo
+     * Episodio, se c'e'. Non scatta su stop manuale o su errore. */
+    onRiproduzioneTerminata: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scopeRitentativo = rememberCoroutineScope()
@@ -76,6 +79,7 @@ fun PlayerScreen(
 
     DisposableEffect(exoPlayer) {
         var ritentativi = 0
+        var terminataNotificata = false
         // Le Sorgenti IPTV cadono spesso per pochi secondi: senza un retry esplicito
         // ExoPlayer resta fermo in STATE_IDLE dopo un errore invece di riprendere da solo.
         val listener = object : Player.Listener {
@@ -90,6 +94,11 @@ fun PlayerScreen(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) ritentativi = 0
+                // STATE_ENDED puo' arrivare piu' volte (es. un seek dopo la fine): il primo basta.
+                if (playbackState == Player.STATE_ENDED && tracciaProgresso && !terminataNotificata) {
+                    terminataNotificata = true
+                    onRiproduzioneTerminata()
+                }
             }
         }
         exoPlayer.addListener(listener)

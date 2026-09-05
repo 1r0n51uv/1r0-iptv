@@ -44,6 +44,7 @@ class RilevatoreNuoviEpisodi {
         nuovi: Map<String, Set<String>>
     ): RigaDashboard? {
         val conNovita = serie.filter { it.chiaveIdentita in nuovi.keys }
+            .map { it.conImmagineDiEpisodio(nuovi[it.chiaveIdentita].orEmpty()) }
         return conNovita.takeIf { it.isNotEmpty() }?.let { RigaDashboard(TipoRiga.NUOVI_EPISODI, it) }
     }
 }

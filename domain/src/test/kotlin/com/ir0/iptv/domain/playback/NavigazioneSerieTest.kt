@@ -53,6 +53,23 @@ class NavigazioneSerieTest {
     fun `a Serie with no Stagione has none to open`() {
         assertNull(navigazione.stagioneIniziale(Serie("Vuota", emptyList()), visti = emptyList()))
     }
+
+    @Test
+    fun `episodiSuccessivi lists everything after the given Episodio, into the next Stagione`() {
+        val successivi = navigazione.episodiSuccessivi(serie, ep(1, 2).url)
+
+        assertEquals(listOf(ep(2, 1).url, ep(2, 2).url), successivi.map { it.url })
+    }
+
+    @Test
+    fun `episodiSuccessivi is empty for the last Episodio of the last Stagione`() {
+        assertEquals(emptyList<String>(), navigazione.episodiSuccessivi(serie, ep(2, 2).url).map { it.url })
+    }
+
+    @Test
+    fun `episodiSuccessivi is empty when the Episodio is not part of the Serie`() {
+        assertEquals(emptyList<String>(), navigazione.episodiSuccessivi(serie, "http://example.com/altro.mp4").map { it.url })
+    }
 }
 
 private fun ep(stagione: Int, numero: Int) = Episodio(

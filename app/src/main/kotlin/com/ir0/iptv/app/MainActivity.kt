@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -66,6 +71,7 @@ import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
 import com.ir0.iptv.domain.dashboard.MemoriaFocus
 import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.dashboard.TipoRiga
+import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -119,6 +125,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
@@ -150,14 +157,19 @@ private fun ContentScreen(
     var impostazioni by remember { mutableStateOf(impostazioniRepository.leggi()) }
     var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
     var sovrapposte by remember { mutableStateOf(listOf<Screen>()) }
+    // Il contenuto per cui e' aperto il menu rapido (pressione lunga su una card).
+    var cardMenu by remember { mutableStateOf<ContentCard?>(null) }
+    // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
+    // senza dover cambiare schermata.
+    var refreshDati by remember { mutableStateOf(0) }
     BackHandler(enabled = sovrapposte.isNotEmpty()) {
         sovrapposte = sovrapposte.dropLast(1)
     }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
     // e la riga Continua a guardare dopo una riproduzione.
-    val visti = remember(sovrapposte, destinazione, catalogoCorrente) { vistoRepository.elenco() }
-    val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente) {
+    val visti = remember(sovrapposte, destinazione, catalogoCorrente, refreshDati) { vistoRepository.elenco() }
+    val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente, refreshDati) {
         personalizzazioneRepository.elenco()
     }
     var rigaNuoviEpisodi by remember(catalogoCorrente) {
@@ -226,6 +238,14 @@ private fun ContentScreen(
             posizioneIniziale = sopra.posizioneIniziale,
             onProgresso = { posizioneMs, durataMs ->
                 vistoRepository.registraProgresso(sopra.richiesta, posizioneMs, durataMs)
+            },
+            onRiproduzioneTerminata = {
+                // A fine Episodio parte da solo il successivo (anche di una Stagione dopo),
+                // scalando la coda. Senza coda (Film, Canale, ultimo Episodio) non succede nulla.
+                sopra.coda.firstOrNull()?.let { prossima ->
+                    sovrapposte = sovrapposte.dropLast(1) +
+                        Screen.Player(prossima, 0L, sopra.coda.drop(1))
+                }
             }
         )
         return
@@ -242,7 +262,19 @@ private fun ContentScreen(
                 inAggiornamento = inAggiornamento,
                 onAggiorna = { richiesteDiAggiornamento++ }
             )
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                // La Sidebar si raggiunge solo con SINISTRA: da qui il focus puo' uscire solo
+                // verso sinistra, mai verso l'alto/il basso/destra su un'icona della Sidebar.
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusProperties {
+                        exit = { direzione ->
+                            if (direzione == FocusDirection.Left) FocusRequester.Default
+                            else FocusRequester.Cancel
+                        }
+                    }
+                    .focusGroup()
+            ) {
                 when (sopra) {
                     is Screen.Detail -> {
                         var preferito by remember(sopra.card) {
@@ -253,8 +285,8 @@ private fun ContentScreen(
                             visti = visti,
                             preferito = preferito,
                             onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(sopra.card) },
-                            onRiproduci = { richiesta, posizione ->
-                                sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
+                            onRiproduci = { richiesta, posizione, coda ->
+                                sovrapposte = sovrapposte + Screen.Player(richiesta, posizione, coda)
                             },
                             onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
                         )
@@ -271,7 +303,7 @@ private fun ContentScreen(
                             ordine = remember(impostazioni.ordineHome) { SezioneHome.daSalvato(impostazioni.ordineHome) },
                             sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.CANALI -> CanaliScreen(
@@ -279,7 +311,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.FILM -> FilmScreen(
@@ -287,7 +319,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.SERIE -> SerieScreen(
@@ -295,7 +327,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.GUIDA -> GuidaTvScreen(
@@ -309,7 +341,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.CERCA -> SearchScreen(
@@ -317,7 +349,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.PREFERITI -> FavoritesScreen(
@@ -325,7 +357,7 @@ private fun ContentScreen(
                             visti = visti,
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.IMPOSTAZIONI -> ImpostazioniScreen(
@@ -338,14 +370,55 @@ private fun ContentScreen(
                         )
                     }
                 }
+
+                cardMenu?.let { card ->
+                    val posizioneRipresa = (card as? ContentCard.Film)
+                        ?.let { vistoRepository.posizioneDiRipresa(it.chiaveIdentita) } ?: 0L
+                    fun riproduci(posizione: Long) {
+                        val richiesta = richiestaDaCard(card) ?: return
+                        cardMenu = null
+                        sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
+                    }
+                    MenuContenuto(
+                        card = card,
+                        preferito = personalizzazioneRepository.preferito(card),
+                        haRipresa = posizioneRipresa > 0L,
+                        onRiproduci = { riproduci(posizioneRipresa) },
+                        onRiproduciDallInizio = { riproduci(0L) },
+                        onRiproduciCon = {
+                            val richiesta = richiestaDaCard(card)
+                            cardMenu = null
+                            if (richiesta != null) RiproduciCon.avvia(context, richiesta)
+                        },
+                        onApriDettaglio = {
+                            cardMenu = null
+                            apri(card)
+                        },
+                        onCambiaPreferito = {
+                            personalizzazioneRepository.cambiaPreferito(card)
+                            refreshDati++
+                            cardMenu = null
+                        },
+                        onChiudi = { cardMenu = null }
+                    )
+                }
             }
         }
     }
 }
 
-/** Un Canale parte subito; per Film e Serie il player esterno si sceglie dal Dettaglio. */
-private fun riproduciConDaCard(context: Context, card: ContentCard) {
-    if (card is ContentCard.Canale) RiproduciCon.avvia(context, card.toRichiesta())
+/** La richiesta per il player interno/esterno a partire da una card giocabile (Canale o Film);
+ * null per una Serie, che si riproduce dalla sua pagina di Dettaglio. */
+private fun richiestaDaCard(card: ContentCard): RichiestaRiproduzione? = when (card) {
+    is ContentCard.Canale ->
+        RichiestaRiproduzione(titolo = card.title, streamUrl = card.streamUrl, posterUrl = card.imageUrl)
+    is ContentCard.Film -> RichiestaRiproduzione(
+        titolo = card.title,
+        streamUrl = card.streamUrl,
+        tipo = TipoVisto.FILM,
+        posterUrl = card.imageUrl
+    )
+    is ContentCard.SerieCard -> null
 }
 
 private fun ContentCard.Canale.toRichiesta() =

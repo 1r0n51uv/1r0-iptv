@@ -17,4 +17,16 @@ class NavigazioneSerie(private val resolver: ProssimaVisioneResolver = ProssimaV
 
     fun stagioneDi(serie: Serie, episodio: Episodio): Stagione? =
         serie.seasons.firstOrNull { stagione -> stagione.episodes.any { it.url == episodio.url } }
+
+    /**
+     * Gli Episodi che vengono dopo quello dato, nell'ordine di visione: le Stagioni si
+     * susseguono, quindi dopo l'ultimo Episodio di una Stagione c'e' il primo della successiva.
+     * Serve a far partire da soli i prossimi Episodi quando la riproduzione arriva in fondo.
+     * Vuota se l'Episodio non appartiene alla Serie o e' l'ultimo.
+     */
+    fun episodiSuccessivi(serie: Serie, episodioUrl: String): List<Episodio> {
+        val episodi = serie.seasons.flatMap { it.episodes }
+        val indice = episodi.indexOfFirst { it.url == episodioUrl }
+        return if (indice < 0) emptyList() else episodi.drop(indice + 1)
+    }
 }

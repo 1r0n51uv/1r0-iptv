@@ -1,9 +1,7 @@
 package com.ir0.iptv.app
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +16,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,7 +49,6 @@ private val ALTEZZA_CARD_VERTICALE = 210.dp
 /** Canali restano in landscape (frame TV); Film e Serie usano la locandina in verticale. */
 private val ContentCard.locandinaVerticale: Boolean get() = this !is ContentCard.Canale
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CardContenuto(
     card: ContentCard,
@@ -65,19 +65,21 @@ fun CardContenuto(
         modifier = Modifier.width(larghezza),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        val forma = RoundedCornerShape(8.dp)
         Box(
             modifier = Modifier
                 .width(larghezza)
                 .height(altezza)
+                .zoomInFocus(infocata, forma)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { infocata = it.isFocused }
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .clip(RoundedCornerShape(8.dp))
+                .pressabile(onClick = onClick, onLongClick = onLongClick)
+                .clip(forma)
                 .background(Color(0xFF262B33))
                 .border(
                     2.dp,
                     if (infocata) LocalAccento.current else Color.Transparent,
-                    RoundedCornerShape(8.dp)
+                    forma
                 )
         ) {
             val imageUrl = card.imageUrl
@@ -88,6 +90,8 @@ fun CardContenuto(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+            } else {
+                PlaceholderLocandina(card, modifier = Modifier.fillMaxSize())
             }
             if (preferito) {
                 Box(
@@ -133,6 +137,25 @@ fun CardContenuto(
             maxLines = if (card.locandinaVerticale) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+/** Riempie il posto della locandina quando un contenuto non ha (ancora) un'immagine: un'icona
+ * neutra sul fondo della card, cosi' la card non resta un rettangolo vuoto. */
+@Composable
+fun PlaceholderLocandina(card: ContentCard, modifier: Modifier = Modifier) {
+    val icona = when (card) {
+        is ContentCard.Canale -> Icons.Filled.Tv
+        is ContentCard.Film -> Icons.Filled.Movie
+        is ContentCard.SerieCard -> Icons.Filled.LiveTv
+    }
+    Box(modifier = modifier.background(Color(0xFF262B33)), contentAlignment = Alignment.Center) {
+        Icon(
+            imageVector = icona,
+            contentDescription = null,
+            tint = Color(0xFF4A505C),
+            modifier = Modifier.size(44.dp)
         )
     }
 }

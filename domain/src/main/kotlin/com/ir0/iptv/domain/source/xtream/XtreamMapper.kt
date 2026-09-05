@@ -37,6 +37,7 @@ class XtreamMapper {
             .map { (seasonNumber, episodes) ->
                 Stagione(
                     number = seasonNumber,
+                    immagine = dto.coverPerStagione[seasonNumber],
                     episodes = episodes
                         .sortedBy { it.episodeNum }
                         .map { episode ->

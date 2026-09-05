@@ -1,10 +1,8 @@
 package com.ir0.iptv.app
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -42,8 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +78,7 @@ fun DetailScreen(
     visti: List<Visto>,
     preferito: Boolean,
     onCambiaPreferito: () -> Unit,
-    onRiproduci: (RichiestaRiproduzione, Long) -> Unit,
+    onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
     onRiproduciCon: (RichiestaRiproduzione) -> Unit
 ) {
     when (card) {
@@ -113,7 +116,7 @@ private fun DettaglioFilm(
     visti: List<Visto>,
     preferito: Boolean,
     onCambiaPreferito: () -> Unit,
-    onRiproduci: (RichiestaRiproduzione, Long) -> Unit,
+    onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
     onRiproduciCon: (RichiestaRiproduzione) -> Unit
 ) {
     val richiesta = RichiestaRiproduzione(
@@ -124,6 +127,8 @@ private fun DettaglioFilm(
     )
     val posizione = registro.posizioneDiRipresa(visti, card.chiaveIdentita)
     val percentuale = registro.percentuale(visti, card.chiaveIdentita)
+    val focusPrincipale = remember(card) { FocusRequester() }
+    LaunchedEffect(card) { runCatching { focusPrincipale.requestFocus() } }
 
     var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
     LaunchedEffect(card) {
@@ -141,9 +146,12 @@ private fun DettaglioFilm(
             dettagli = dettagli
         ) {
             PulsanteAzione(
-                testo = posizione?.let { "Riprendi da ${durata(it)}" } ?: "Riproduci",
+                // Un Film mai visto e' "Play"; ripreso mostra solo "Riprendi", senza il minutaggio.
+                testo = if (posizione != null) "Riprendi" else "Play",
                 principale = true,
-                onClick = { onRiproduci(richiesta, posizione ?: 0L) }
+                icona = Icons.Filled.PlayArrow,
+                focusRequester = focusPrincipale,
+                onClick = { onRiproduci(richiesta, posizione ?: 0L, emptyList()) }
             )
             PulsantePreferito(preferito, onCambiaPreferito)
             PulsanteAzione(testo = "Riproduci con…", onClick = { onRiproduciCon(richiesta) })
@@ -161,21 +169,50 @@ private fun DettaglioSerie(
     visti: List<Visto>,
     preferito: Boolean,
     onCambiaPreferito: () -> Unit,
-    onRiproduci: (RichiestaRiproduzione, Long) -> Unit,
+    onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
     onRiproduciCon: (RichiestaRiproduzione) -> Unit
 ) {
     val prossima = remember(serie, visti) { resolver.risolvi(serie, visti) }
     var stagioneSelezionata by remember(serie) {
         mutableStateOf(navigazione.stagioneIniziale(serie, visti))
     }
+    val focusPrincipale = remember(serie) { FocusRequester() }
+    // All'apertura del Dettaglio il D-pad parte sul pulsante Play/Riprendi.
+    LaunchedEffect(prossima) { runCatching { focusPrincipale.requestFocus() } }
+
+    val primoEpisodio = serie.seasons.flatMap { it.episodes }.firstOrNull()
+
+    /** "S{stagione} E{episodio}" quando entrambi i numeri sono noti (le Sorgenti M3U senza
+     * pattern riconoscibile non li hanno). */
+    fun siglaDi(episodio: Episodio): String? {
+        val stagione = serie.seasons.firstOrNull { st -> st.episodes.any { it.url == episodio.url } }?.number
+        val numero = episodio.episodeNumber
+        return if (stagione != null && numero != null) "S$stagione E$numero" else null
+    }
+
+    fun etichettaRiprendi(episodio: Episodio) = "Riprendi" + (siglaDi(episodio)?.let { " $it" } ?: "")
+
+    /** Il primo Episodio in assoluto e' un "Play" secco (come un Film mai visto); dal secondo in
+     * poi si aggiunge la sigla, cosi' si sa da dove riparte senza aprire la lista. */
+    fun etichettaPlay(episodio: Episodio) =
+        if (episodio.url == primoEpisodio?.url) "Play" else "Play" + (siglaDi(episodio)?.let { " $it" } ?: "")
 
     fun richiestaDi(episodio: Episodio) = RichiestaRiproduzione(
         titolo = episodio.title,
         streamUrl = episodio.url,
         tipo = TipoVisto.EPISODIO,
         serie = serie.name,
-        posterUrl = serie.poster ?: card.imageUrl
+        // Immagine: prima l'Episodio, poi la copertina della Stagione, poi la locandina della Serie.
+        posterUrl = episodio.immagine
+            ?: navigazione.stagioneDi(serie, episodio)?.immagine
+            ?: serie.poster
+            ?: card.imageUrl
     )
+
+    /** Gli Episodi dopo questo, gia' pronti da riprodurre: il player li fa partire da solo
+     * quando la riproduzione arriva in fondo. */
+    fun codaDopo(episodio: Episodio): List<RichiestaRiproduzione> =
+        navigazione.episodiSuccessivi(serie, episodio.url).map(::richiestaDi)
 
     Pagina {
         Testata(
@@ -191,24 +228,37 @@ private fun DettaglioSerie(
         ) {
             when (prossima) {
                 is ProssimaVisione.Riprendi -> PulsanteAzione(
-                    testo = "Riprendi ${prossima.episodio.title}",
+                    testo = etichettaRiprendi(prossima.episodio),
                     principale = true,
-                    onClick = { onRiproduci(richiestaDi(prossima.episodio), prossima.posizioneMs) }
+                    icona = Icons.Filled.PlayArrow,
+                    focusRequester = focusPrincipale,
+                    onClick = {
+                        onRiproduci(
+                            richiestaDi(prossima.episodio),
+                            prossima.posizioneMs,
+                            codaDopo(prossima.episodio)
+                        )
+                    }
                 )
 
                 is ProssimaVisione.Inizia -> PulsanteAzione(
-                    testo = "Riproduci ${prossima.episodio.title}",
+                    testo = etichettaPlay(prossima.episodio),
                     principale = true,
-                    onClick = { onRiproduci(richiestaDi(prossima.episodio), 0L) }
+                    icona = Icons.Filled.PlayArrow,
+                    focusRequester = focusPrincipale,
+                    onClick = {
+                        onRiproduci(richiestaDi(prossima.episodio), 0L, codaDopo(prossima.episodio))
+                    }
                 )
 
                 ProssimaVisione.Completata -> {
-                    val primo = serie.seasons.firstOrNull()?.episodes?.firstOrNull()
-                    if (primo != null) {
+                    if (primoEpisodio != null) {
                         PulsanteAzione(
-                            testo = "Rivedi dall'inizio",
+                            testo = "Play",
                             principale = true,
-                            onClick = { onRiproduci(richiestaDi(primo), 0L) }
+                            icona = Icons.Filled.PlayArrow,
+                            focusRequester = focusPrincipale,
+                            onClick = { onRiproduci(richiestaDi(primoEpisodio), 0L, codaDopo(primoEpisodio)) }
                         )
                     }
                 }
@@ -238,7 +288,11 @@ private fun DettaglioSerie(
                 posterSerie = serie.poster ?: card.imageUrl,
                 visti = visti,
                 onEpisodioClick = { episodio ->
-                    onRiproduci(richiestaDi(episodio), registro.posizioneDiRipresa(visti, episodio.url) ?: 0L)
+                    onRiproduci(
+                        richiestaDi(episodio),
+                        registro.posizioneDiRipresa(visti, episodio.url) ?: 0L,
+                        codaDopo(episodio)
+                    )
                 },
                 onEpisodioRiproduciCon = { episodio -> onRiproduciCon(richiestaDi(episodio)) }
             )
@@ -357,28 +411,44 @@ private fun RigaMetaEstesa(etichetta: String, valore: String) {
 }
 
 @Composable
-private fun PulsanteAzione(testo: String, principale: Boolean = false, onClick: () -> Unit) {
+private fun PulsanteAzione(
+    testo: String,
+    principale: Boolean = false,
+    icona: ImageVector? = null,
+    focusRequester: FocusRequester? = null,
+    onClick: () -> Unit
+) {
     var infocato by remember { mutableStateOf(false) }
     val sfondo = when {
         principale -> LocalAccento.current
         infocato -> Color(0xFF3A404A)
         else -> Color(0xFF262B33)
     }
-    Text(
-        text = testo,
-        color = if (principale) Color(0xFF14161A) else Color(0xFFF2F2F0),
-        fontSize = 14.sp,
-        fontWeight = if (principale) FontWeight.Bold else FontWeight.SemiBold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    val colore = if (principale) Color(0xFF14161A) else Color(0xFFF2F2F0)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .widthIn(max = 420.dp)
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
             .background(sfondo, RoundedCornerShape(8.dp))
             .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
             .padding(horizontal = 18.dp, vertical = 10.dp)
-    )
+    ) {
+        if (icona != null) {
+            Icon(imageVector = icona, contentDescription = null, tint = colore, modifier = Modifier.size(18.dp))
+        }
+        Text(
+            text = testo,
+            color = colore,
+            fontSize = 14.sp,
+            fontWeight = if (principale) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable
@@ -399,6 +469,10 @@ private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
 }
 
 private fun nomeStagione(stagione: Stagione): String = stagione.number?.let { "Stagione $it" } ?: "Altri episodi"
+
+/** Il dropdown Stagioni mostra al massimo 6 voci (48.dp l'una + 8.dp di padding sopra e sotto);
+ * oltre, si scorre. Non si adatta a quante ne entrano nello schermo. */
+private val ALTEZZA_MAX_DROPDOWN_STAGIONI = 48.dp * 6 + 16.dp
 
 @Composable
 private fun SelettoreStagioni(
@@ -430,7 +504,11 @@ private fun SelettoreStagioni(
             Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color(0xFF9AA0AA))
         }
         MaterialTheme(colorScheme = darkColorScheme(surface = Color(0xFF1F232A), onSurface = Color(0xFFF2F2F0))) {
-            DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
+            DropdownMenu(
+                expanded = espanso,
+                onDismissRequest = { espanso = false },
+                modifier = Modifier.heightIn(max = ALTEZZA_MAX_DROPDOWN_STAGIONI)
+            ) {
                 stagioni.forEach { stagione ->
                     DropdownMenuItem(
                         text = {
@@ -460,7 +538,8 @@ private fun CarouselEpisodi(
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        // Spazio verticale perche' la card in focus, ingrandita, non venga tagliata.
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         items(episodi) { episodio ->
             CardEpisodio(
@@ -474,7 +553,6 @@ private fun CarouselEpisodi(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CardEpisodio(
     episodio: Episodio,
@@ -484,23 +562,25 @@ private fun CardEpisodio(
     onLongClick: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
+    val forma = RoundedCornerShape(8.dp)
     Column(
         modifier = Modifier
             .width(240.dp)
             .onFocusChanged { infocato = it.isFocused }
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .pressabile(onClick = onClick, onLongClick = onLongClick),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             modifier = Modifier
                 .width(240.dp)
                 .height(135.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .zoomInFocus(infocato, forma)
+                .clip(forma)
                 .background(Color(0xFF262B33))
                 .border(
                     2.dp,
                     if (infocato) LocalAccento.current else Color.Transparent,
-                    RoundedCornerShape(8.dp)
+                    forma
                 )
         ) {
             if (immagine != null) {
@@ -557,17 +637,5 @@ private fun DettaglioErrore(titolo: String) {
             color = Color(0xFF9AA0AA),
             fontSize = 16.sp
         )
-    }
-}
-
-private fun durata(ms: Long): String {
-    val secondiTotali = ms / 1000
-    val ore = secondiTotali / 3600
-    val minuti = (secondiTotali % 3600) / 60
-    val secondi = secondiTotali % 60
-    return if (ore > 0) {
-        "%d:%02d:%02d".format(ore, minuti, secondi)
-    } else {
-        "%d:%02d".format(minuti, secondi)
     }
 }

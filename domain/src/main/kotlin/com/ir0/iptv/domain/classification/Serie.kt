@@ -9,7 +9,10 @@ data class Serie(
 
 data class Stagione(
     val number: Int?,
-    val episodes: List<Episodio>
+    val episodes: List<Episodio>,
+    /** La copertina della Stagione, quando la Sorgente la espone (le Sorgenti Xtream nel blocco
+     * `seasons`); null per le Sorgenti M3U. */
+    val immagine: String? = null
 )
 
 data class Episodio(

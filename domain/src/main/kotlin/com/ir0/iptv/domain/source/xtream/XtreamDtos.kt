@@ -42,5 +42,7 @@ data class XtreamSeriesInfoDto(
     val seriesName: String,
     val episodesBySeason: Map<Int, List<XtreamEpisodeDto>>,
     val cover: String? = null,
-    val plot: String? = null
+    val plot: String? = null,
+    /** Copertina per numero di Stagione, dal blocco `seasons` di get_series_info. */
+    val coverPerStagione: Map<Int, String> = emptyMap()
 )

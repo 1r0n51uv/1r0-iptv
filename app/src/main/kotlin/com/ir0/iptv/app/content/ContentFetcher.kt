@@ -28,6 +28,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val CONNECT_TIMEOUT_MS = 10_000
@@ -345,11 +346,19 @@ private fun JSONObject.toSeriesInfoDto(): XtreamSeriesInfoDto {
         val episodes = (0 until episodesArray.length()).map { i -> episodesArray.getJSONObject(i).toEpisodeDto() }
         seasonNumber to episodes
     }.toMap()
+    val seasonsArray = optJSONArray("seasons") ?: JSONArray()
+    val coverPerStagione = (0 until seasonsArray.length()).mapNotNull { i ->
+        val stagione = seasonsArray.optJSONObject(i) ?: return@mapNotNull null
+        val numero = stagione.opt("season_number")?.toString()?.toIntOrNull() ?: return@mapNotNull null
+        val copertina = stagione.optStringOrNull("cover_big") ?: stagione.optStringOrNull("cover")
+        copertina?.let { numero to it }
+    }.toMap()
     return XtreamSeriesInfoDto(
         seriesName = name,
         episodesBySeason = episodesBySeason,
         cover = cover,
-        plot = plot
+        plot = plot,
+        coverPerStagione = coverPerStagione
     )
 }
 

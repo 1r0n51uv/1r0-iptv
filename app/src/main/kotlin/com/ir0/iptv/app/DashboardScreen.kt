@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,6 +119,11 @@ fun DashboardScreen(
             hero != null && hero.chiaveIdentita == chiaveDaFocalizzare -> {
                 statoColonna.scrollToItem(0)
                 runCatching { focusRequester.requestFocus() }
+                // Dare il focus al pulsante Riprendi innesca un bring-into-view che puo'
+                // spingere fuori dallo schermo il bordo alto dell'hero, che invece ci sta
+                // tutto: dopo un frame si rimette la lista in cima.
+                withFrameNanos { }
+                statoColonna.scrollToItem(0)
             }
             indiceSezioneDaFocalizzare >= 0 -> {
                 statoColonna.scrollToItem(indiceSezioneDaFocalizzare + offsetHero)
@@ -181,7 +187,9 @@ private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
 private val ALTEZZA_HERO = 340.dp
 
 /** La banda in evidenza con il contenuto da riprendere: sfondo della locandina sfocato, titolo e
- * pulsante Riprendi in basso a sinistra, come nella Home precedente al refactor con Sidebar. */
+ * pulsante Riprendi in basso a sinistra, come nella Home precedente al refactor con Sidebar.
+ * Il focus (e quindi il D-pad all'avvio) va sul pulsante, non sull'intera banda: cosi' premere
+ * OK riproduce subito, senza dover indovinare dove sia l'area cliccabile. */
 @Composable
 private fun HeroContinua(
     card: ContentCard,
@@ -191,7 +199,7 @@ private fun HeroContinua(
     focusRequester: FocusRequester?,
     onClick: () -> Unit
 ) {
-    var infocata by remember { mutableStateOf(false) }
+    var pulsanteInfocato by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val accento = LocalAccento.current
     val etichetta = when {
@@ -211,12 +219,13 @@ private fun HeroContinua(
             .fillMaxWidth()
             .height(ALTEZZA_HERO)
             .padding(horizontal = 32.dp)
-            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-            .onFocusChanged { infocata = it.isFocused }
-            .clickable(onClick = onClick)
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF262B33))
-            .border(2.dp, if (infocata) accento else Color.Transparent, RoundedCornerShape(14.dp))
+            .border(
+                2.dp,
+                if (pulsanteInfocato) accento else Color.Transparent,
+                RoundedCornerShape(14.dp)
+            )
     ) {
         val imageUrl = card.imageUrl
         if (imageUrl != null) {
@@ -229,6 +238,8 @@ private fun HeroContinua(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+        } else {
+            PlaceholderLocandina(card, modifier = Modifier.fillMaxSize())
         }
         Box(
             modifier = Modifier
@@ -298,8 +309,16 @@ private fun HeroContinua(
             Row(
                 modifier = Modifier
                     .padding(top = 6.dp)
+                    .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                    .onFocusChanged { pulsanteInfocato = it.isFocused }
                     .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onClick)
                     .background(accento)
+                    .border(
+                        2.dp,
+                        if (pulsanteInfocato) Color(0xFFF2F2F0) else Color.Transparent,
+                        RoundedCornerShape(8.dp)
+                    )
                     .padding(horizontal = 18.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -369,7 +388,8 @@ fun RigaContenuti(
         LazyRow(
             state = statoRiga,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 32.dp)
+            // Il padding verticale lascia respirare la card in focus, ingrandita, senza tagliarla.
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
         ) {
             items(contenuti) { card ->
                 CardContenuto(

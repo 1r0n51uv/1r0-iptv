@@ -157,9 +157,10 @@ fun GrigliaContenuti(
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(200.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        // Margini extra perche' la card in focus, ingrandita, non venga tagliata ai bordi.
+        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 12.dp, bottom = 28.dp)
     ) {
         items(contenuti) { card ->
             CardContenuto(

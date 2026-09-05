@@ -118,6 +118,23 @@ class XtreamMapperTest {
     }
 
     @Test
+    fun `carries the per-season cover onto the matching Stagione`() {
+        val dto = XtreamSeriesInfoDto(
+            seriesName = "The Bear",
+            episodesBySeason = mapOf(
+                1 to listOf(XtreamEpisodeDto(id = 101, episodeNum = 1, title = "Sistemi", containerExtension = "mp4")),
+                2 to listOf(XtreamEpisodeDto(id = 201, episodeNum = 1, title = "Prenotazioni", containerExtension = "mp4"))
+            ),
+            coverPerStagione = mapOf(2 to "http://covers.example/s2.jpg")
+        )
+
+        val serie = XtreamMapper().toSerie(dto, connection)
+
+        assertNull(serie.seasons[0].immagine)
+        assertEquals("http://covers.example/s2.jpg", serie.seasons[1].immagine)
+    }
+
+    @Test
     fun `an episode without its own image simply has none, and falls back to the Serie poster in the UI`() {
         val dto = XtreamSeriesInfoDto(
             seriesName = "The Bear",
