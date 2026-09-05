@@ -1,5 +1,6 @@
 package com.ir0.iptv.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -38,14 +39,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
+import com.ir0.iptv.app.navigation.Destinazione
+import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
 import com.ir0.iptv.app.playback.VistoRepository
+import com.ir0.iptv.app.session.StatoSessioneRepository
+import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.ElencoPreferiti
+import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
+import com.ir0.iptv.domain.dashboard.MemoriaFocus
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -59,12 +67,18 @@ private const val QR_CODE_SIZE_PX = 768
 private val MIN_TEXT_COLUMN_WIDTH = 280.dp
 private val ROW_SPACING = 64.dp
 
+private val costruttoreDashboard = CostruttoreDashboard()
+private val memoriaFocus = MemoriaFocus()
+private val elencoPreferiti = ElencoPreferiti()
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
+        val statoSessioneRepository = StatoSessioneRepository(applicationContext)
+        val impostazioniRepository = ImpostazioniRepository(applicationContext)
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -77,7 +91,13 @@ class MainActivity : ComponentActivity() {
             if (sorgenti.isEmpty()) {
                 OnboardingScreen(webPanelAddress = remember { localWebPanelAddress() })
             } else {
-                ContentScreen(sorgenti, vistoRepository, personalizzazioneRepository)
+                ContentScreen(
+                    sorgenti = sorgenti,
+                    vistoRepository = vistoRepository,
+                    personalizzazioneRepository = personalizzazioneRepository,
+                    statoSessioneRepository = statoSessioneRepository,
+                    impostazioniRepository = impostazioniRepository
+                )
             }
         }
     }
@@ -87,7 +107,9 @@ class MainActivity : ComponentActivity() {
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
     vistoRepository: VistoRepository,
-    personalizzazioneRepository: PersonalizzazioneRepository
+    personalizzazioneRepository: PersonalizzazioneRepository,
+    statoSessioneRepository: StatoSessioneRepository,
+    impostazioniRepository: ImpostazioniRepository
 ) {
     val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
@@ -100,46 +122,118 @@ private fun ContentScreen(
         return
     }
 
-    var backStack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
-    BackHandler(enabled = backStack.size > 1) {
-        backStack = backStack.dropLast(1)
+    var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
+    var sovrapposte by remember { mutableStateOf(listOf<Screen>()) }
+    BackHandler(enabled = sovrapposte.isNotEmpty()) {
+        sovrapposte = sovrapposte.dropLast(1)
     }
 
-    when (val schermata = backStack.last()) {
-        is Screen.Home -> HomeScreen(
-            catalogo = catalogoCorrente,
-            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta(), 0L) },
-            onFilmClick = { backStack = backStack + Screen.Detail(it) },
-            onSerieClick = { backStack = backStack + Screen.Detail(it) }
+    // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
+    // e la riga Continua a guardare dopo una riproduzione.
+    val visti = remember(sovrapposte, destinazione, catalogoCorrente) { vistoRepository.elenco() }
+    val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente) {
+        personalizzazioneRepository.elenco()
+    }
+    val righe = remember(catalogoCorrente, visti, personalizzazioni) {
+        costruttoreDashboard.costruisci(catalogoCorrente, visti, personalizzazioni)
+    }
+
+    var chiaveDaFocalizzare by remember(catalogoCorrente) {
+        mutableStateOf(
+            memoriaFocus.focusIniziale(
+                righe = righe,
+                ultimaChiave = statoSessioneRepository.ultimaChiave(),
+                contenutoDiDefault = impostazioniRepository.leggi().contenutoDiDefault
+            )
         )
+    }
 
-        is Screen.Detail -> {
-            var preferito by remember(schermata.card) {
-                mutableStateOf(personalizzazioneRepository.preferito(schermata.card))
-            }
-            DetailScreen(
-                card = schermata.card,
-                visti = remember(schermata.card) { vistoRepository.elenco() },
-                preferito = preferito,
-                onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(schermata.card) },
-                onRiproduci = { richiesta, posizione ->
-                    backStack = backStack + Screen.Player(richiesta, posizione)
-                },
-                onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
-            )
-        }
-
-        is Screen.Player -> {
-            val richiesta = schermata.richiesta
-            PlayerScreen(
-                richiesta = richiesta,
-                posizioneIniziale = schermata.posizioneIniziale,
-                onProgresso = { posizioneMs, durataMs ->
-                    vistoRepository.registraProgresso(richiesta, posizioneMs, durataMs)
-                }
-            )
+    fun apri(card: ContentCard) {
+        chiaveDaFocalizzare = card.chiaveIdentita
+        statoSessioneRepository.salvaUltimaChiave(card.chiaveIdentita)
+        sovrapposte = sovrapposte + when (card) {
+            is ContentCard.Canale -> Screen.Player(card.toRichiesta(), 0L)
+            else -> Screen.Detail(card)
         }
     }
+
+    val sopra = sovrapposte.lastOrNull()
+    if (sopra is Screen.Player) {
+        PlayerScreen(
+            richiesta = sopra.richiesta,
+            posizioneIniziale = sopra.posizioneIniziale,
+            onProgresso = { posizioneMs, durataMs ->
+                vistoRepository.registraProgresso(sopra.richiesta, posizioneMs, durataMs)
+            }
+        )
+        return
+    }
+
+    Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
+        Sidebar(
+            selezionata = destinazione,
+            onSeleziona = {
+                destinazione = it
+                sovrapposte = emptyList()
+            }
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (sopra) {
+                is Screen.Detail -> {
+                    var preferito by remember(sopra.card) {
+                        mutableStateOf(personalizzazioneRepository.preferito(sopra.card))
+                    }
+                    DetailScreen(
+                        card = sopra.card,
+                        visti = visti,
+                        preferito = preferito,
+                        onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(sopra.card) },
+                        onRiproduci = { richiesta, posizione ->
+                            sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
+                        },
+                        onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
+                    )
+                }
+
+                else -> when (destinazione) {
+                    Destinazione.DASHBOARD -> DashboardScreen(
+                        righe = righe,
+                        visti = visti,
+                        chiaveDaFocalizzare = chiaveDaFocalizzare,
+                                onContenutoClick = { apri(it) },
+                        onContenutoLongClick = { riproduciConDaCard(context, it) }
+                    )
+
+                    Destinazione.SFOGLIA -> BrowseScreen(
+                        catalogo = catalogoCorrente,
+                        visti = visti,
+                        chiaveDaFocalizzare = chiaveDaFocalizzare,
+                                onContenutoClick = { apri(it) },
+                        onContenutoLongClick = { riproduciConDaCard(context, it) }
+                    )
+
+                    Destinazione.CERCA -> SearchScreen(
+                        catalogo = catalogoCorrente,
+                        visti = visti,
+                        onContenutoClick = { apri(it) },
+                        onContenutoLongClick = { riproduciConDaCard(context, it) }
+                    )
+
+                    Destinazione.PREFERITI -> FavoritesScreen(
+                        preferiti = elencoPreferiti.preferiti(catalogoCorrente, personalizzazioni),
+                        visti = visti,
+                        onContenutoClick = { apri(it) },
+                        onContenutoLongClick = { riproduciConDaCard(context, it) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Un Canale parte subito; per Film e Serie il player esterno si sceglie dal Dettaglio. */
+private fun riproduciConDaCard(context: Context, card: ContentCard) {
+    if (card is ContentCard.Canale) RiproduciCon.avvia(context, card.toRichiesta())
 }
 
 private fun ContentCard.Canale.toRichiesta() =
