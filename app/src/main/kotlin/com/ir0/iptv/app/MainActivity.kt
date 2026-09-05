@@ -251,6 +251,7 @@ private fun ContentScreen(
         return
     }
 
+    val focusSidebarSezione = remember { FocusRequester() }
     CompositionLocalProvider(LocalAccento provides Accento.daNome(impostazioni.accento).colore) {
         Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
             Sidebar(
@@ -259,17 +260,19 @@ private fun ContentScreen(
                     destinazione = it
                     sovrapposte = emptyList()
                 },
+                focusSezioneCorrente = focusSidebarSezione,
                 inAggiornamento = inAggiornamento,
                 onAggiorna = { richiesteDiAggiornamento++ }
             )
             Box(
-                // La Sidebar si raggiunge solo con SINISTRA: da qui il focus puo' uscire solo
-                // verso sinistra, mai verso l'alto/il basso/destra su un'icona della Sidebar.
+                // La Sidebar si raggiunge solo con SINISTRA, e da qualsiasi punto dei contenuti
+                // il focus atterra sull'icona della sezione corrente. Verso alto/basso/destra il
+                // focus non esce sui contenuti stessi.
                 modifier = Modifier
                     .fillMaxSize()
                     .focusProperties {
                         exit = { direzione ->
-                            if (direzione == FocusDirection.Left) FocusRequester.Default
+                            if (direzione == FocusDirection.Left) focusSidebarSezione
                             else FocusRequester.Cancel
                         }
                     }

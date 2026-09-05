@@ -3,6 +3,7 @@ package com.ir0.iptv.app.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ir0.iptv.app.theme.LocalAccento
+import com.ir0.iptv.app.zoomInFocus
 
 private val ICONA_DIMENSIONE = 40.dp
 private val GLIFO_DIMENSIONE = 22.dp
@@ -43,6 +47,9 @@ private val SPAZIATURA = 8.dp
 fun Sidebar(
     selezionata: Destinazione,
     onSeleziona: (Destinazione) -> Unit,
+    /** Attaccato all'icona della sezione corrente: chi entra nella Sidebar (di solito con
+     * SINISTRA dai contenuti) ci mette sopra il focus, invece che su quella piu' vicina. */
+    focusSezioneCorrente: FocusRequester,
     inAggiornamento: Boolean = false,
     onAggiorna: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -52,15 +59,18 @@ fun Sidebar(
             .width(88.dp)
             .fillMaxHeight()
             .background(Color(0xFF191C22))
-            .padding(vertical = 12.dp),
+            .padding(vertical = 12.dp)
+            .focusGroup(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(SPAZIATURA)
     ) {
         Destinazione.entries.forEach { destinazione ->
+            val corrente = destinazione == selezionata
             SidebarButton(
                 icona = iconaDi(destinazione),
                 descrizione = destinazione.etichetta,
-                active = destinazione == selezionata,
+                active = corrente,
+                focusRequester = focusSezioneCorrente.takeIf { corrente },
                 onClick = { onSeleziona(destinazione) }
             )
         }
@@ -81,18 +91,27 @@ private fun iconaDi(destinazione: Destinazione): ImageVector = when (destinazion
 }
 
 @Composable
-private fun SidebarButton(icona: ImageVector, descrizione: String, active: Boolean, onClick: () -> Unit) {
+private fun SidebarButton(
+    icona: ImageVector,
+    descrizione: String,
+    active: Boolean,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val accento = LocalAccento.current
+    val forma = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
             .size(ICONA_DIMENSIONE)
-            .clip(RoundedCornerShape(10.dp))
+            .zoomInFocus(isFocused, forma, scalaMax = 1.18f, ombraMax = 6.dp)
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+            .clip(forma)
             .background(if (active) accento else Color.Transparent)
             .then(
                 if (isFocused && !active) {
-                    Modifier.border(2.dp, accento, RoundedCornerShape(10.dp))
+                    Modifier.border(2.dp, accento, forma)
                 } else {
                     Modifier
                 }
@@ -115,13 +134,15 @@ private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val accento = LocalAccento.current
+    val forma = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
             .size(ICONA_DIMENSIONE)
-            .clip(RoundedCornerShape(10.dp))
+            .zoomInFocus(isFocused, forma, scalaMax = 1.18f, ombraMax = 6.dp)
+            .clip(forma)
             .then(
                 if (isFocused) {
-                    Modifier.border(2.dp, accento, RoundedCornerShape(10.dp))
+                    Modifier.border(2.dp, accento, forma)
                 } else {
                     Modifier
                 }
