@@ -45,7 +45,7 @@ Impostazioni locali applicate dall'utente a un Canale/Film/Serie che non derivan
 _Avoid_: Override, flag
 
 **Chiave di Identità**:
-L'identificatore stabile di un Canale/Film/Episodio tra un refresh e l'altro della Sorgente: il `tvg-id` se presente, altrimenti l'URL dello stream. Usata per riagganciare le Personalizzazioni dopo un aggiornamento della Sorgente.
+L'identificatore stabile di un Canale/Film/Episodio tra un refresh e l'altro della Sorgente: il `tvg-id` se presente, altrimenti l'URL dello stream. Una Serie, che non ha un URL proprio, è identificata dal suo nome. Usata per riagganciare le Personalizzazioni e i Visti dopo un aggiornamento della Sorgente.
 
 ### Cronologia, scoperta e navigazione
 
