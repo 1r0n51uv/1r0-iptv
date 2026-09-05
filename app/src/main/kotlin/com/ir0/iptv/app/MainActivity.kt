@@ -177,7 +177,8 @@ private fun ContentScreen(
         partiteInEvidenza = sportInEvidenza.partite(
             attivo = impostazioni.sportInDashboard,
             chiaveApi = impostazioni.chiaveApiSport,
-            canali = catalogoCorrente.canali
+            canali = catalogoCorrente.canali,
+            limite = 20
         )
     }
 
@@ -264,8 +265,29 @@ private fun ContentScreen(
                             righe = righe,
                             visti = visti,
                             chiaveDaFocalizzare = chiaveDaFocalizzare,
-                            sport = partiteInEvidenza,
+                            sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
+
+                        Destinazione.CANALI -> CanaliScreen(
+                            catalogo = catalogoCorrente,
+                            visti = visti,
+                            onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
+
+                        Destinazione.FILM -> FilmScreen(
+                            catalogo = catalogoCorrente,
+                            visti = visti,
+                            onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { riproduciConDaCard(context, it) }
+                        )
+
+                        Destinazione.SERIE -> SerieScreen(
+                            catalogo = catalogoCorrente,
+                            visti = visti,
+                            onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
 
@@ -274,11 +296,11 @@ private fun ContentScreen(
                             onCanaleClick = { apri(it) }
                         )
 
-                        Destinazione.SFOGLIA -> BrowseScreen(
+                        Destinazione.SPORT -> SportScreen(
                             catalogo = catalogoCorrente,
+                            partite = partiteInEvidenza,
                             visti = visti,
-                            chiaveDaFocalizzare = chiaveDaFocalizzare,
-                                onContenutoClick = { apri(it) },
+                            onContenutoClick = { apri(it) },
                             onContenutoLongClick = { riproduciConDaCard(context, it) }
                         )
 

@@ -14,10 +14,11 @@ class SportInEvidenza(
     suspend fun partite(
         attivo: Boolean,
         chiaveApi: String?,
-        canali: List<ContentCard.Canale>
+        canali: List<ContentCard.Canale>,
+        limite: Int = 2
     ): List<PartitaConCanale> {
         if (!attivo || chiaveApi.isNullOrBlank()) return emptyList()
-        return selettore.inEvidenza(client.partiteDiOggi(chiaveApi))
+        return selettore.inEvidenza(client.partiteDiOggi(chiaveApi), quante = limite)
             .map { PartitaConCanale(it, selettore.canalePer(it, canali)) }
     }
 }
