@@ -9,17 +9,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val INTERVALLO_SALVATAGGIO_MS = 10_000L
+private const val RITENTATIVI_MASSIMI_ERRORE = 5
+private const val ATTESA_RITENTATIVO_MS = 1_000L
 
 @Composable
 fun PlayerScreen(
@@ -28,6 +34,7 @@ fun PlayerScreen(
     onProgresso: (posizioneMs: Long, durataMs: Long) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val scopeRitentativo = rememberCoroutineScope()
     val exoPlayer = remember(richiesta.streamUrl) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(richiesta.streamUrl))
@@ -49,7 +56,27 @@ fun PlayerScreen(
     }
 
     DisposableEffect(exoPlayer) {
+        var ritentativi = 0
+        // Le Sorgenti IPTV cadono spesso per pochi secondi: senza un retry esplicito
+        // ExoPlayer resta fermo in STATE_IDLE dopo un errore invece di riprendere da solo.
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (ritentativi >= RITENTATIVI_MASSIMI_ERRORE) return
+                ritentativi++
+                scopeRitentativo.launch {
+                    delay(ATTESA_RITENTATIVO_MS)
+                    exoPlayer.prepare()
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) ritentativi = 0
+            }
+        }
+        exoPlayer.addListener(listener)
+
         onDispose {
+            exoPlayer.removeListener(listener)
             if (tracciaProgresso) {
                 onProgresso(exoPlayer.currentPosition, exoPlayer.durataNota())
             }
