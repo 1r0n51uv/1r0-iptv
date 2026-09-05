@@ -30,21 +30,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ir0.iptv.domain.catalog.ContentCard
-import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
+import com.ir0.iptv.app.playback.RiproduciCon
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
 import com.ir0.iptv.app.webpanel.WebPanelServer
-import com.ir0.iptv.domain.classification.Episodio
-import com.ir0.iptv.domain.playback.TipoVisto
+import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
+        val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         setContent {
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
@@ -76,7 +78,7 @@ class MainActivity : ComponentActivity() {
             if (sorgenti.isEmpty()) {
                 OnboardingScreen(webPanelAddress = webPanelAddress)
             } else {
-                ContentScreen(sorgenti, webPanelAddress, vistoRepository)
+                ContentScreen(sorgenti, webPanelAddress, vistoRepository, personalizzazioneRepository)
             }
         }
     }
@@ -86,8 +88,10 @@ class MainActivity : ComponentActivity() {
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
     webPanelAddress: String?,
-    vistoRepository: VistoRepository
+    vistoRepository: VistoRepository,
+    personalizzazioneRepository: PersonalizzazioneRepository
 ) {
+    val context = LocalContext.current
     var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     LaunchedEffect(sorgenti) {
         catalogo = ContentFetcher().catalogo(sorgenti)
@@ -110,30 +114,30 @@ private fun ContentScreen(
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta()) },
-            onFilmClick = { backStack = backStack + Screen.Player(it.toRichiesta()) },
-            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
+            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta(), 0L) },
+            onFilmClick = { backStack = backStack + Screen.Detail(it) },
+            onSerieClick = { backStack = backStack + Screen.Detail(it) }
         )
 
         is Screen.Canali -> CanaliScreen(
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta()) }
+            onCanaleClick = { backStack = backStack + Screen.Player(it.toRichiesta(), 0L) }
         )
 
         is Screen.Film -> FilmScreen(
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onFilmClick = { backStack = backStack + Screen.Player(it.toRichiesta()) }
+            onFilmClick = { backStack = backStack + Screen.Detail(it) }
         )
 
         is Screen.Serie -> SerieScreen(
             catalogo = catalogoCorrente,
             activeIndex = sidebarIndexForScreen(schermata),
             onSidebarClick = onSidebarClick,
-            onSerieClick = { backStack = backStack + Screen.SeriesDetail(it) }
+            onSerieClick = { backStack = backStack + Screen.Detail(it) }
         )
 
         is Screen.Preferiti -> PreferitiScreen(
@@ -148,20 +152,27 @@ private fun ContentScreen(
             onSidebarClick = onSidebarClick
         )
 
-        is Screen.SeriesDetail -> SeriesDetailScreen(
-            card = schermata.card,
-            onEpisodioClick = { episodio ->
-                backStack = backStack + Screen.Player(episodio.toRichiesta(schermata.card))
+        is Screen.Detail -> {
+            var preferito by remember(schermata.card) {
+                mutableStateOf(personalizzazioneRepository.preferito(schermata.card))
             }
-        )
+            DetailScreen(
+                card = schermata.card,
+                visti = remember(schermata.card) { vistoRepository.elenco() },
+                preferito = preferito,
+                onCambiaPreferito = { preferito = personalizzazioneRepository.cambiaPreferito(schermata.card) },
+                onRiproduci = { richiesta, posizione ->
+                    backStack = backStack + Screen.Player(richiesta, posizione)
+                },
+                onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
+            )
+        }
 
         is Screen.Player -> {
             val richiesta = schermata.richiesta
             PlayerScreen(
                 richiesta = richiesta,
-                posizioneIniziale = remember(richiesta) {
-                    vistoRepository.posizioneDiRipresa(richiesta.chiaveIdentita) ?: 0L
-                },
+                posizioneIniziale = schermata.posizioneIniziale,
                 onProgresso = { posizioneMs, durataMs ->
                     vistoRepository.registraProgresso(richiesta, posizioneMs, durataMs)
                 }
@@ -172,21 +183,6 @@ private fun ContentScreen(
 
 private fun ContentCard.Canale.toRichiesta() =
     RichiestaRiproduzione(titolo = title, streamUrl = streamUrl, posterUrl = imageUrl)
-
-private fun ContentCard.Film.toRichiesta() = RichiestaRiproduzione(
-    titolo = title,
-    streamUrl = streamUrl,
-    tipo = TipoVisto.FILM,
-    posterUrl = imageUrl
-)
-
-private fun Episodio.toRichiesta(serie: ContentCard.SerieCard) = RichiestaRiproduzione(
-    titolo = title,
-    streamUrl = url,
-    tipo = TipoVisto.EPISODIO,
-    serie = serie.title,
-    posterUrl = serie.imageUrl
-)
 
 private fun localWebPanelAddress(): String? {
     val interfaces = try {

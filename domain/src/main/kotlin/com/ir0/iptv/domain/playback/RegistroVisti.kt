@@ -19,6 +19,12 @@ class RegistroVisti {
         return visto.posizioneMs
     }
 
+    fun percentuale(visti: List<Visto>, chiaveIdentita: String): Int {
+        val visto = visti.firstOrNull { it.chiaveIdentita == chiaveIdentita } ?: return 0
+        if (visto.durataMs <= 0) return 0
+        return (visto.posizioneMs * 100 / visto.durataMs).toInt().coerceIn(0, 100)
+    }
+
     fun continuaAGuardare(visti: List<Visto>): List<Visto> =
         visti.filterNot { completato(it) }
             .sortedByDescending { it.aggiornatoIl }

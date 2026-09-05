@@ -85,7 +85,13 @@ class ContentFetcher(
             streamJsonArray(xtreamApiUrl(connection, "get_vod_streams")) { readVodStreamDto() }
                 .map { dto ->
                     val movie = xtreamMapper.toMovie(dto, connection)
-                    ContentCard.Film(title = movie.title, imageUrl = movie.poster, streamUrl = movie.url, plot = movie.plot)
+                    ContentCard.Film(
+                        title = movie.title,
+                        imageUrl = movie.poster,
+                        streamUrl = movie.url,
+                        categoria = movie.categoryName,
+                        plot = movie.plot
+                    )
                 }
         }
 
@@ -152,9 +158,11 @@ private inline fun <T> tryOrNull(block: () -> T): T? = try {
     null
 }
 
-private fun M3uEntry.toCanaleCard() = ContentCard.Canale(title = title, imageUrl = tvgLogo, streamUrl = url)
+private fun M3uEntry.toCanaleCard() =
+    ContentCard.Canale(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle)
 
-private fun M3uEntry.toFilmCard() = ContentCard.Film(title = title, imageUrl = tvgLogo, streamUrl = url)
+private fun M3uEntry.toFilmCard() =
+    ContentCard.Film(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle)
 
 private fun xtreamApiUrl(connection: XtreamConnection, action: String): String =
     "http://${connection.host}:${connection.port}/player_api.php" +
@@ -250,6 +258,7 @@ private fun JSONObject.toSeriesInfoDto(): XtreamSeriesInfoDto {
     val info = optJSONObject("info")
     val name = info?.optStringOrNull("name") ?: optStringOrNull("name") ?: "Serie"
     val cover = info?.optStringOrNull("cover")
+    val plot = info?.optStringOrNull("plot")
     val episodesJson = optJSONObject("episodes") ?: JSONObject()
     val episodesBySeason = episodesJson.keys().asSequence().mapNotNull { seasonKey ->
         val seasonNumber = seasonKey.toIntOrNull() ?: return@mapNotNull null
@@ -257,14 +266,20 @@ private fun JSONObject.toSeriesInfoDto(): XtreamSeriesInfoDto {
         val episodes = (0 until episodesArray.length()).map { i -> episodesArray.getJSONObject(i).toEpisodeDto() }
         seasonNumber to episodes
     }.toMap()
-    return XtreamSeriesInfoDto(seriesName = name, episodesBySeason = episodesBySeason, cover = cover)
+    return XtreamSeriesInfoDto(
+        seriesName = name,
+        episodesBySeason = episodesBySeason,
+        cover = cover,
+        plot = plot
+    )
 }
 
 private fun JSONObject.toEpisodeDto(): XtreamEpisodeDto = XtreamEpisodeDto(
     id = optInt("id", 0),
     episodeNum = optInt("episode_num", 0),
     title = optStringOrNull("title") ?: "Episodio",
-    containerExtension = optStringOrNull("container_extension") ?: "mp4"
+    containerExtension = optStringOrNull("container_extension") ?: "mp4",
+    immagine = optJSONObject("info")?.optStringOrNull("movie_image")
 )
 
 private fun JSONObject.optStringOrNull(key: String): String? =

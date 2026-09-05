@@ -74,6 +74,19 @@ class RegistroVistiTest {
     }
 
     @Test
+    fun `the progress percentage of a half watched content is half`() {
+        val visti = listOf(film(chiave = "dune", posizioneMs = 4_980_000, durataMs = 9_960_000))
+
+        assertEquals(50, registro.percentuale(visti, "dune"))
+    }
+
+    @Test
+    fun `there is no progress percentage without a known duration or without a Visto`() {
+        assertEquals(0, registro.percentuale(emptyList(), "dune"))
+        assertEquals(0, registro.percentuale(listOf(film(chiave = "dune", posizioneMs = 600_000, durataMs = 0)), "dune"))
+    }
+
+    @Test
     fun `continue watching lists the most recently updated first`() {
         val visti = listOf(
             film(chiave = "dune", posizioneMs = 600_000, aggiornatoIl = 100),
