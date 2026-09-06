@@ -71,6 +71,7 @@ import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
 import com.ir0.iptv.domain.dashboard.MemoriaFocus
 import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.dashboard.TipoRiga
+import com.ir0.iptv.domain.playback.RegistroVisti
 import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.source.Sorgente
 import java.net.Inet4Address
@@ -88,6 +89,7 @@ private val ROW_SPACING = 64.dp
 private val costruttoreDashboard = CostruttoreDashboard()
 private val memoriaFocus = MemoriaFocus()
 private val elencoPreferiti = ElencoPreferiti()
+private val registroVisti = RegistroVisti()
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -377,6 +379,12 @@ private fun ContentScreen(
                 cardMenu?.let { card ->
                     val posizioneRipresa = (card as? ContentCard.Film)
                         ?.let { vistoRepository.posizioneDiRipresa(it.chiaveIdentita) } ?: 0L
+                    val chiaviContinua = registroVisti.continuaAGuardare(visti)
+                        .map { it.serie ?: it.chiaveIdentita }.toSet()
+                    val inContinua = when (card) {
+                        is ContentCard.SerieCard -> card.title in chiaviContinua
+                        else -> card.chiaveIdentita in chiaviContinua
+                    }
                     fun riproduci(posizione: Long) {
                         val richiesta = richiestaDaCard(card) ?: return
                         cardMenu = null
@@ -386,6 +394,7 @@ private fun ContentScreen(
                         card = card,
                         preferito = personalizzazioneRepository.preferito(card),
                         haRipresa = posizioneRipresa > 0L,
+                        inContinuaAGuardare = inContinua,
                         onRiproduci = { riproduci(posizioneRipresa) },
                         onRiproduciDallInizio = { riproduci(0L) },
                         onRiproduciCon = {
@@ -399,6 +408,11 @@ private fun ContentScreen(
                         },
                         onCambiaPreferito = {
                             personalizzazioneRepository.cambiaPreferito(card)
+                            refreshDati++
+                            cardMenu = null
+                        },
+                        onRimuoviDaContinua = {
+                            vistoRepository.rimuoviDaiVisti(card)
                             refreshDati++
                             cardMenu = null
                         },

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -34,6 +35,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -49,6 +55,7 @@ import coil.request.ImageRequest
 import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.domain.catalog.ContentCard
+import kotlinx.coroutines.delay
 
 /** Le azioni rapide su un contenuto, aperte tenendo premuto OK su una card. Cosa compare dipende
  * dal tipo: un Canale non ha un Dettaglio ne' una posizione da riprendere, una Serie si gioca
@@ -59,11 +66,13 @@ fun MenuContenuto(
     card: ContentCard,
     preferito: Boolean,
     haRipresa: Boolean,
+    inContinuaAGuardare: Boolean,
     onRiproduci: () -> Unit,
     onRiproduciDallInizio: () -> Unit,
     onRiproduciCon: () -> Unit,
     onApriDettaglio: () -> Unit,
     onCambiaPreferito: () -> Unit,
+    onRimuoviDaContinua: () -> Unit,
     onChiudi: () -> Unit
 ) {
     val riproducibile = card is ContentCard.Canale || card is ContentCard.Film
@@ -76,10 +85,28 @@ fun MenuContenuto(
     ) {
         LaunchedEffect(card) { runCatching { primoFocus.requestFocus() } }
 
+        // Il menu si apre mentre OK e' ancora premuto: la coda della pressione lunga (KeyDown
+        // ripetuti + primo rilascio) va ignorata, altrimenti farebbe scattare da sola la prima
+        // voce. Il menu "si arma" al primo rilascio di OK, o comunque dopo un breve timeout.
+        var armato by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            delay(1200)
+            armato = true
+        }
+
         val context = LocalContext.current
         val forma = RoundedCornerShape(14.dp)
         Box(
             modifier = Modifier
+                .onPreviewKeyEvent { evento ->
+                    if (armato) return@onPreviewKeyEvent false
+                    val tastoCentrale = evento.key == Key.DirectionCenter ||
+                        evento.key == Key.Enter ||
+                        evento.key == Key.NumPadEnter
+                    if (!tastoCentrale) return@onPreviewKeyEvent false
+                    if (evento.type == KeyEventType.KeyUp) armato = true
+                    true
+                }
                 .width(380.dp)
                 .clip(forma)
                 .background(Color(0xFF1F232A))
@@ -162,6 +189,14 @@ fun MenuContenuto(
                 focusRequester = focusDiTesta(),
                 onClick = onCambiaPreferito
             )
+            if (inContinuaAGuardare) {
+                VoceMenu(
+                    testo = "Togli da Continua a guardare",
+                    icona = Icons.Filled.RemoveCircleOutline,
+                    focusRequester = focusDiTesta(),
+                    onClick = onRimuoviDaContinua
+                )
+            }
             }
         }
     }

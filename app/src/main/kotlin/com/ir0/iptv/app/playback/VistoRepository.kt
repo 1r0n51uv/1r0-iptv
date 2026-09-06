@@ -1,6 +1,7 @@
 package com.ir0.iptv.app.playback
 
 import android.content.Context
+import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.playback.RegistroVisti
 import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.playback.Visto
@@ -34,6 +35,17 @@ class VistoRepository(
 
     @Synchronized
     fun continuaAGuardare(): List<Visto> = registro.continuaAGuardare(elenco())
+
+    /** Toglie un contenuto dai Visti (quindi da "Continua a guardare"): per una Serie elimina i
+     * Visti di tutti i suoi Episodi, per Film/Canale il Visto con quella Chiave di Identita'. */
+    @Synchronized
+    fun rimuoviDaiVisti(card: ContentCard) {
+        val restanti = when (card) {
+            is ContentCard.SerieCard -> elenco().filterNot { it.serie == card.title }
+            else -> elenco().filterNot { it.chiaveIdentita == card.chiaveIdentita }
+        }
+        file.writeText(JSONArray(restanti.map { it.toJson() }).toString())
+    }
 
     @Synchronized
     fun registraProgresso(richiesta: RichiestaRiproduzione, posizioneMs: Long, durataMs: Long) {
