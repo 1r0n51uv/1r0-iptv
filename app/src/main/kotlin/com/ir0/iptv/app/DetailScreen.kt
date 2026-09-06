@@ -135,8 +135,11 @@ private fun DettaglioFilm(
     LaunchedEffect(card) { runCatching { focusPrincipale.requestFocus() } }
 
     var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
+    // Le Sorgenti M3U non hanno un DettaglioEsteso da recuperare: niente scheletro per loro.
+    var caricandoDettagli by remember(card) { mutableStateOf(card.xtream != null) }
     LaunchedEffect(card) {
         dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+        caricandoDettagli = false
     }
 
     Pagina(sfondo = card.imageUrl) {
@@ -147,7 +150,8 @@ private fun DettaglioFilm(
             titolo = card.title,
             meta = card.categoria,
             plot = card.plot ?: dettagli?.trama,
-            dettagli = dettagli
+            dettagli = dettagli,
+            caricandoDettagli = caricandoDettagli
         ) {
             PulsanteAzione(
                 // Un Film mai visto e' "Play"; ripreso mostra solo "Riprendi", senza il minutaggio.
@@ -353,6 +357,9 @@ private fun Testata(
     meta: String?,
     plot: String?,
     dettagli: DettaglioEsteso? = null,
+    /** In attesa del DettaglioEsteso (solo Film da Sorgenti Xtream): mostra uno scheletro al
+     * posto del pannello cast/regista/genere, invece di uno spazio vuoto che poi "salta" fuori. */
+    caricandoDettagli: Boolean = false,
     azioni: @Composable () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
@@ -398,8 +405,32 @@ private fun Testata(
             }
             if (dettagli != null && !dettagli.isEmpty) {
                 DettagliEstesi(dettagli)
+            } else if (caricandoDettagli) {
+                ScheletroDettagliEstesi()
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { azioni() }
+        }
+    }
+}
+
+@Composable
+private fun ScheletroDettagliEstesi() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .width(180.dp)
+                .height(13.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF262B33))
+        )
+        repeat(2) {
+            Box(
+                modifier = Modifier
+                    .width(280.dp)
+                    .height(13.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF262B33))
+            )
         }
     }
 }
