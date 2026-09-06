@@ -1,5 +1,10 @@
 package com.ir0.iptv.app.navigation
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ir0.iptv.app.theme.LocalAccento
@@ -42,6 +48,7 @@ import com.ir0.iptv.app.zoomInFocus
 private val ICONA_DIMENSIONE = 40.dp
 private val GLIFO_DIMENSIONE = 22.dp
 private val SPAZIATURA = 8.dp
+private const val DURATA_ROTAZIONE_MS = 900
 
 @Composable
 fun Sidebar(
@@ -156,11 +163,27 @@ private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // La rotazione infinita vive solo mentre serve: appena inAggiornamento torna falso questo
+        // ramo esce di composizione e Compose la ferma da solo, invece di girare per sempre.
+        val angolo = if (inAggiornamento) {
+            val transizione = rememberInfiniteTransition(label = "rotazioneAggiorna")
+            val valore by transizione.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(tween(DURATA_ROTAZIONE_MS, easing = LinearEasing)),
+                label = "angoloAggiorna"
+            )
+            valore
+        } else {
+            0f
+        }
         Icon(
             imageVector = Icons.Filled.Autorenew,
             contentDescription = if (inAggiornamento) "Aggiornamento in corso" else "Aggiorna catalogo",
             tint = if (inAggiornamento) Color(0xFF4A505C) else Color(0xFF9AA0AA),
-            modifier = Modifier.size(GLIFO_DIMENSIONE)
+            modifier = Modifier
+                .size(GLIFO_DIMENSIONE)
+                .graphicsLayer { rotationZ = angolo }
         )
     }
 }
