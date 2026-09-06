@@ -3,14 +3,12 @@ package com.ir0.iptv.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,494 +19,166 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
-import com.ir0.iptv.app.content.ContentFetcher
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.ir0.iptv.app.sport.PartitaConCanale
-import com.ir0.iptv.app.theme.Colori
-import com.ir0.iptv.app.theme.Spazi
-import com.ir0.iptv.app.theme.Tipo
-import com.ir0.iptv.app.ui.BarraAvanzamento
-import com.ir0.iptv.app.ui.sfondoBlocco
-import com.ir0.iptv.app.ui.testoSecondarioSuBlocco
-import com.ir0.iptv.app.ui.testoSuBlocco
+import com.ir0.iptv.app.theme.LocalAccento
+import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ElencoPreferiti
 import com.ir0.iptv.domain.customization.ContentCustomization
 import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.dashboard.TipoRiga
-import com.ir0.iptv.domain.epg.GuidaTv
-import com.ir0.iptv.domain.epg.Programma
 import com.ir0.iptv.domain.playback.RegistroVisti
 import com.ir0.iptv.domain.playback.Visto
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 private val registroVisti = RegistroVisti()
-private val guidaTv = GuidaTv()
-private val fmtGiorno = SimpleDateFormat("EEEE d MMMM", Locale.ITALY)
-private val fmtOra = SimpleDateFormat("HH:mm", Locale.ITALY)
+private val elencoPreferiti = ElencoPreferiti()
 
-private val FORMA_VOCE = RoundedCornerShape(6.dp)
-
-/**
- * La Home come palinsesto: che ora è, cosa riprendere, cosa è in onda ora sui canali che segui,
- * e gli elenchi curati (nuovi episodi, suggeriti, preferiti). Niente vetrina di locandine.
- */
+/** Le righe curate compaiono sempre, anche vuote: la Dashboard deve far capire cosa puo'
+ * mostrare, non solo cosa mostra in questo momento. */
 @Composable
 fun DashboardScreen(
     righe: List<RigaDashboard>,
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
     catalogoVuoto: Boolean,
-    canaliInEvidenza: List<ContentCard.Canale> = emptyList(),
     personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
     contenutoDiDefault: String? = null,
     ordine: List<SezioneHome> = SezioneHome.ordinePredefinito,
     sport: List<PartitaConCanale> = emptyList(),
     onContenutoClick: (ContentCard) -> Unit,
-    onContenutoLongClick: (ContentCard) -> Unit = {},
-    onApriConnessione: () -> Unit = {}
+    onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
     if (catalogoVuoto) {
-        CatalogoVuoto(onApriConnessione)
+        SchermataVuota(
+            "Nessun contenuto trovato nelle Sorgenti configurate. Se un abbonamento è scaduto, " +
+                "apri Connessione nella barra laterale e inquadra il QR per aggiornare le credenziali " +
+                "dal Pannello Web."
+        )
         return
     }
 
     val righePerTipo = remember(righe) { righe.associateBy { it.tipo } }
-    val continua = righePerTipo[TipoRiga.CONTINUA]?.contenuti ?: emptyList()
+    val rigaContinuaOriginale = righePerTipo[TipoRiga.CONTINUA]?.contenuti ?: emptyList()
+    // Il primo contenuto della Dashboard e' quello da riprendere (o il Contenuto di default se
+    // non si e' ancora guardato nulla): mostrato come banda in evidenza, non piu' dentro la riga
+    // (qualunque essa sia: col ripiego l'hero puo' venire da Preferiti o Nuovi episodi).
     val hero = remember(righe, contenutoDiDefault) {
-        continua.firstOrNull()
+        rigaContinuaOriginale.firstOrNull()
             ?: righe.flatMap { it.contenuti }.firstOrNull { it.chiaveIdentita == contenutoDiDefault }
     }
-    val heroDaRiprendere = hero != null && continua.any { it.chiaveIdentita == hero.chiaveIdentita }
-
-    fun vistoDi(card: ContentCard): Visto? = when (card) {
-        is ContentCard.SerieCard -> visti.filter { it.serie == card.title }.maxByOrNull { it.aggiornatoIl }
-        else -> visti.firstOrNull { it.chiaveIdentita == card.chiaveIdentita }
+    val tipoRigaHero = remember(righe, hero) {
+        hero?.let { h -> righe.firstOrNull { riga -> riga.contenuti.any { it.chiaveIdentita == h.chiaveIdentita } }?.tipo }
     }
+    val heroDaRiprendere = tipoRigaHero == TipoRiga.CONTINUA
 
-    fun contenutiSezione(tipo: TipoRiga): List<ContentCard> {
+    fun contenutiRigaVisibili(tipo: TipoRiga): List<ContentCard> {
         val originali = righePerTipo[tipo]?.contenuti ?: emptyList()
-        return if (hero != null && tipo == TipoRiga.CONTINUA) {
+        return if (hero != null && tipo == tipoRigaHero) {
             originali.filterNot { it.chiaveIdentita == hero.chiaveIdentita }
         } else {
             originali
         }
     }
 
-    // EPG "in onda ora" per i primi canali in evidenza: chiamate di rete al volo, best-effort.
-    var inOnda by remember(canaliInEvidenza) { mutableStateOf<Map<String, Programma?>>(emptyMap()) }
-    LaunchedEffect(canaliInEvidenza) {
-        val fetcher = ContentFetcher()
-        val ora = System.currentTimeMillis()
-        canaliInEvidenza.take(6).forEach { canale ->
-            val prog = canale.xtream?.let {
-                runCatching { guidaTv.inOnda(fetcher.palinsesto(it), ora) }.getOrNull()
-            }
-            inOnda = inOnda + (canale.chiaveIdentita to prog)
-        }
-    }
-
     val statoColonna = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(chiaveDaFocalizzare, righe) {
-        runCatching { focusRequester.requestFocus() }
-        statoColonna.scrollToItem(0)
+    val offsetHero = if (hero != null) 1 else 0
+    val indiceSezioneDaFocalizzare = ordine.indexOfFirst { sezione ->
+        val tipo = tipoRigaDi(sezione) ?: return@indexOfFirst false
+        contenutiRigaVisibili(tipo).any { it.chiaveIdentita == chiaveDaFocalizzare }
+    }
+
+    LaunchedEffect(chiaveDaFocalizzare, righe, ordine, hero) {
+        when {
+            hero != null && hero.chiaveIdentita == chiaveDaFocalizzare -> {
+                statoColonna.scrollToItem(0)
+                runCatching { focusRequester.requestFocus() }
+                // Dare il focus al pulsante Riprendi innesca un bring-into-view che puo'
+                // spingere fuori dallo schermo il bordo alto dell'hero, che invece ci sta
+                // tutto: dopo un frame si rimette la lista in cima.
+                withFrameNanos { }
+                statoColonna.scrollToItem(0)
+            }
+            indiceSezioneDaFocalizzare >= 0 -> {
+                statoColonna.scrollToItem(indiceSezioneDaFocalizzare + offsetHero)
+                // La card puo' non essere ancora attaccata: in quel caso resta il focus di default.
+                runCatching { focusRequester.requestFocus() }
+            }
+        }
     }
 
     LazyColumn(
         state = statoColonna,
-        modifier = Modifier.fillMaxSize().background(Colori.inchiostro),
-        contentPadding = PaddingValues(
-            start = Spazi.l, end = Spazi.bordoSchermo,
-            top = Spazi.l, bottom = Spazi.xl
-        ),
-        verticalArrangement = Arrangement.spacedBy(Spazi.l)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF14161A)),
+        contentPadding = PaddingValues(vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-        item { IntestazioneGiorno() }
-
         if (hero != null) {
             item {
-                BloccoRiprendi(
+                HeroContinua(
                     card = hero,
-                    visto = vistoDi(hero),
+                    percentuale = registroVisti.percentuale(visti, hero.chiaveIdentita),
+                    preferito = elencoPreferiti.preferito(personalizzazioni, hero),
                     daRiprendere = heroDaRiprendere,
-                    focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare }
-                        ?: focusRequester,
+                    focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
                     onClick = { onContenutoClick(hero) }
                 )
             }
         }
-
-        if (canaliInEvidenza.isNotEmpty()) {
-            item {
-                StripInOnda(
-                    canali = canaliInEvidenza,
-                    inOnda = inOnda,
-                    onCanale = onContenutoClick
-                )
-            }
-        }
-
         items(ordine) { sezione ->
-            when (sezione) {
-                SezioneHome.SPORT -> if (sport.isNotEmpty()) {
-                    FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
-                }
-                else -> {
-                    val tipo = tipoRigaDi(sezione) ?: return@items
-                    Listino(
-                        titolo = etichettaSezione(sezione, heroDaRiprendere),
-                        sezione = coloreSezione(tipo),
-                        voci = contenutiSezione(tipo),
-                        vistoDi = ::vistoDi,
-                        chiaveDaFocalizzare = chiaveDaFocalizzare,
-                        focusRequester = focusRequester,
-                        onClick = onContenutoClick,
-                        onLongClick = onContenutoLongClick,
-                        messaggioVuoto = if (tipo == TipoRiga.CONTINUA && heroDaRiprendere) null
-                        else messaggioVuotoDi(tipo)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/* ---------- Intestazione ---------- */
-
-@Composable
-private fun IntestazioneGiorno() {
-    var ora by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            ora = System.currentTimeMillis()
-            kotlinx.coroutines.delay(30_000)
-        }
-    }
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spazi.m)) {
-        Text(
-            text = fmtGiorno.format(Date(ora)).replaceFirstChar { it.uppercase() },
-            style = Tipo.corpo,
-            color = Colori.testoFioco
-        )
-        Spacer(Modifier.weight(1f))
-        Text(text = fmtOra.format(Date(ora)), style = Tipo.oraGrande, color = Colori.testo)
-    }
-}
-
-/* ---------- Riprendi ---------- */
-
-@Composable
-private fun BloccoRiprendi(
-    card: ContentCard,
-    visto: Visto?,
-    daRiprendere: Boolean,
-    focusRequester: FocusRequester,
-    onClick: () -> Unit
-) {
-    val src = remember { MutableInteractionSource() }
-    val infocato by src.collectIsFocusedAsState()
-    val sezione = Colori.live
-
-    val minutiRimasti = visto?.takeIf { it.durataMs > 0 }?.let {
-        ((it.durataMs - it.posizioneMs).coerceAtLeast(0L) / 60_000L).toInt()
-    }
-    val perc = visto?.takeIf { it.durataMs > 0 }?.let {
-        (it.posizioneMs * 100 / it.durataMs).toInt().coerceIn(0, 100)
-    } ?: 0
-    val sottotitolo = when {
-        visto?.serie != null -> visto.titolo
-        card is ContentCard.SerieCard -> card.categoria ?: "Serie"
-        card is ContentCard.Film -> card.categoria ?: "Film"
-        else -> "Canale"
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .sfondoBlocco(infocato, sezione, RoundedCornerShape(10.dp))
-            .focusRequester(focusRequester)
-            .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = Spazi.m, vertical = Spazi.m),
-        verticalArrangement = Arrangement.spacedBy(Spazi.s)
-    ) {
-        Text(
-            text = if (daRiprendere) "Riprendi" else "Inizia",
-            style = Tipo.etichetta,
-            color = if (infocato) sezione else sezione
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = card.title,
-                style = Tipo.titolo.copy(fontSize = 34.sp, lineHeight = 38.sp),
-                color = testoSuBlocco(infocato),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "▸",
-                fontSize = 28.sp,
-                color = if (infocato) Colori.inchiostro else sezione
-            )
-        }
-        Text(
-            text = sottotitolo,
-            style = Tipo.corpo,
-            color = testoSecondarioSuBlocco(infocato),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (perc > 0) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spazi.m)) {
-                BarraAvanzamento(
-                    percentuale = perc,
-                    colore = if (infocato) Colori.inchiostro else sezione,
-                    fondo = if (infocato) Color(0x33000000) else Colori.linea,
-                    modifier = Modifier.width(280.dp).height(3.dp)
-                )
-                if (minutiRimasti != null) {
-                    Text(
-                        text = "$minutiRimasti min rimasti",
-                        style = Tipo.ora,
-                        color = testoSecondarioSuBlocco(infocato)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/* ---------- In onda ora ---------- */
-
-@Composable
-private fun StripInOnda(
-    canali: List<ContentCard.Canale>,
-    inOnda: Map<String, Programma?>,
-    onCanale: (ContentCard.Canale) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spazi.s)) {
-        EtichettaSezione("In onda ora", Colori.live, "su ${canali.size} canali che segui")
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(Spazi.s), contentPadding = PaddingValues(vertical = 2.dp)) {
-            items(canali) { canale ->
-                TesseraCanale(
-                    canale = canale,
-                    programma = inOnda[canale.chiaveIdentita],
-                    onClick = { onCanale(canale) }
+            if (sezione == SezioneHome.SPORT) {
+                FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
+            } else {
+                val tipo = tipoRigaDi(sezione)!!
+                RigaContenuti(
+                    titolo = sezione.etichetta,
+                    contenuti = contenutiRigaVisibili(tipo),
+                    visti = visti,
+                    personalizzazioni = personalizzazioni,
+                    chiaveDaFocalizzare = chiaveDaFocalizzare,
+                    focusRequester = focusRequester,
+                    onClick = onContenutoClick,
+                    onLongClick = onContenutoLongClick,
+                    // Quando l'hero e' il contenuto da riprendere copre gia' il messaggio di
+                    // ripiego di Continua; col ripiego al Contenuto di default resta utile.
+                    messaggioVuoto = if (tipo == TipoRiga.CONTINUA && heroDaRiprendere) null else messaggioVuotoDi(tipo)
                 )
             }
         }
     }
 }
-
-@Composable
-private fun TesseraCanale(
-    canale: ContentCard.Canale,
-    programma: Programma?,
-    onClick: () -> Unit
-) {
-    val src = remember { MutableInteractionSource() }
-    val infocato by src.collectIsFocusedAsState()
-    val ora = System.currentTimeMillis()
-    Column(
-        modifier = Modifier
-            .width(184.dp)
-            .height(96.dp)
-            .sfondoBlocco(infocato, Colori.live, FORMA_VOCE)
-            .then(if (!infocato) Modifier.background(Colori.superficie, FORMA_VOCE) else Modifier)
-            .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = Spazi.s, vertical = Spazi.s),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (infocato) Colori.inchiostro else Colori.inOnda))
-            Text(
-                text = canale.title,
-                style = Tipo.corpoForte,
-                color = testoSuBlocco(infocato),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Text(
-            text = programma?.titolo ?: "diretta",
-            style = Tipo.corpo.copy(fontSize = 13.sp, lineHeight = 16.sp),
-            color = testoSecondarioSuBlocco(infocato),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.weight(1f))
-        if (programma != null) {
-            Text(
-                text = "fino alle ${fmtOra.format(Date(programma.fineMs))}",
-                style = Tipo.siglaEpisodio,
-                color = testoSecondarioSuBlocco(infocato)
-            )
-            BarraAvanzamento(
-                percentuale = guidaTv.percentuale(programma, ora),
-                colore = if (infocato) Colori.inchiostro else Colori.inOnda,
-                fondo = if (infocato) Color(0x33000000) else Colori.linea,
-                modifier = Modifier.fillMaxWidth().height(2.dp)
-            )
-        }
-    }
-}
-
-/* ---------- Elenchi curati ---------- */
-
-@Composable
-private fun Listino(
-    titolo: String,
-    sezione: Color,
-    voci: List<ContentCard>,
-    vistoDi: (ContentCard) -> Visto?,
-    chiaveDaFocalizzare: String?,
-    focusRequester: FocusRequester,
-    onClick: (ContentCard) -> Unit,
-    onLongClick: (ContentCard) -> Unit,
-    messaggioVuoto: String?
-) {
-    if (voci.isEmpty()) {
-        if (messaggioVuoto == null) return
-        Column(verticalArrangement = Arrangement.spacedBy(Spazi.s)) {
-            EtichettaSezione(titolo, sezione)
-            Text(messaggioVuoto, style = Tipo.corpo, color = Colori.testoDebole)
-        }
-        return
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        EtichettaSezione(titolo, sezione)
-        Spacer(Modifier.height(Spazi.xs))
-        voci.take(6).forEach { card ->
-            RigaListino(
-                card = card,
-                visto = vistoDi(card),
-                sezione = sezione,
-                focusRequester = focusRequester.takeIf { card.chiaveIdentita == chiaveDaFocalizzare },
-                onClick = { onClick(card) },
-                onLongClick = { onLongClick(card) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun RigaListino(
-    card: ContentCard,
-    visto: Visto?,
-    sezione: Color,
-    focusRequester: FocusRequester?,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    val src = remember { MutableInteractionSource() }
-    val infocato by src.collectIsFocusedAsState()
-    val tipo = when (card) {
-        is ContentCard.Canale -> "canale"
-        is ContentCard.Film -> "film"
-        is ContentCard.SerieCard -> "serie"
-    }
-    val perc = visto?.takeIf { it.durataMs > 0 }?.let {
-        (it.posizioneMs * 100 / it.durataMs).toInt().coerceIn(0, 100)
-    } ?: 0
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .sfondoBlocco(infocato, sezione, FORMA_VOCE)
-            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-            .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = Spazi.s, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spazi.m)
-    ) {
-        Text(
-            text = tipo,
-            style = Tipo.siglaEpisodio,
-            color = if (infocato) Color(0xFF4A4C50) else sezione,
-            modifier = Modifier.width(52.dp)
-        )
-        Text(
-            text = card.title,
-            style = Tipo.corpoForte,
-            color = testoSuBlocco(infocato),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        if (perc in 1..99) {
-            BarraAvanzamento(
-                percentuale = perc,
-                colore = if (infocato) Colori.inchiostro else sezione,
-                fondo = if (infocato) Color(0x33000000) else Colori.linea,
-                modifier = Modifier.width(96.dp).height(2.dp)
-            )
-        }
-    }
-}
-
-/* ---------- Pezzi comuni ---------- */
-
-@Composable
-private fun EtichettaSezione(testo: String, sezione: Color, coda: String? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spazi.s)) {
-        Box(Modifier.width(18.dp).height(3.dp).background(sezione))
-        Text(testo, style = Tipo.sezione, color = Colori.testo)
-        if (coda != null) {
-            Text(coda, style = Tipo.corpo, color = Colori.testoDebole)
-        }
-    }
-}
-
-@Composable
-private fun CatalogoVuoto(onApriConnessione: () -> Unit) {
-    val src = remember { MutableInteractionSource() }
-    val infocato by src.collectIsFocusedAsState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Colori.inchiostro)
-            .padding(Spazi.bordoSchermo),
-        verticalArrangement = Arrangement.spacedBy(Spazi.m)
-    ) {
-        Text("Nessun contenuto dalle Sorgenti", style = Tipo.titolo, color = Colori.testo)
-        Text(
-            "Una Sorgente non risponde. Se un abbonamento Xtream è scaduto, il catalogo resta vuoto: " +
-                "apri Connessione e inquadra il QR per aggiornare le credenziali dal Pannello Web.",
-            style = Tipo.corpo,
-            color = Colori.testoFioco,
-            modifier = Modifier.width(560.dp)
-        )
-        Row(
-            modifier = Modifier
-                .sfondoBlocco(infocato, Colori.sistema, RoundedCornerShape(8.dp))
-                .then(if (!infocato) Modifier.border(1.dp, Colori.linea, RoundedCornerShape(8.dp)) else Modifier)
-                .clickable(interactionSource = src, indication = null, onClick = onApriConnessione)
-                .padding(horizontal = Spazi.m, vertical = 10.dp)
-        ) {
-            Text("Apri Connessione", style = Tipo.corpoForte, color = testoSuBlocco(infocato))
-        }
-    }
-}
-
-/* ---------- Mappe sezione ---------- */
 
 private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
     SezioneHome.SPORT -> null
@@ -518,35 +188,243 @@ private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
     SezioneHome.PREFERITI -> TipoRiga.PREFERITI
 }
 
-private fun coloreSezione(tipo: TipoRiga): Color = when (tipo) {
-    TipoRiga.CONTINUA -> Colori.live
-    TipoRiga.NUOVI_EPISODI -> Colori.serie
-    TipoRiga.SUGGERITI -> Colori.film
-    TipoRiga.PREFERITI -> Colori.preferiti
+private val ALTEZZA_HERO = 340.dp
+
+/** La banda in evidenza con il contenuto da riprendere: sfondo della locandina sfocato, titolo e
+ * pulsante Riprendi in basso a sinistra, come nella Home precedente al refactor con Sidebar.
+ * Il focus (e quindi il D-pad all'avvio) va sul pulsante, non sull'intera banda: cosi' premere
+ * OK riproduce subito, senza dover indovinare dove sia l'area cliccabile. */
+@Composable
+private fun HeroContinua(
+    card: ContentCard,
+    percentuale: Int,
+    preferito: Boolean,
+    daRiprendere: Boolean,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit
+) {
+    var pulsanteInfocato by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val accento = LocalAccento.current
+    val etichetta = when {
+        daRiprendere -> "CONTINUA A GUARDARE"
+        card is ContentCard.SerieCard -> "SERIE"
+        card is ContentCard.Canale -> "CANALE"
+        else -> "FILM"
+    }
+    val etichettaPulsante = when {
+        daRiprendere -> "Riprendi"
+        card is ContentCard.SerieCard -> "Vai alla Serie"
+        else -> "Riproduci"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ALTEZZA_HERO)
+            .padding(horizontal = 32.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF262B33))
+            .border(
+                2.dp,
+                if (pulsanteInfocato) accento else Color.Transparent,
+                RoundedCornerShape(14.dp)
+            )
+    ) {
+        val imageUrl = card.imageUrl
+        if (imageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(imageUrl)
+                    .transformations(DownsampleBlurTransformation())
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            PlaceholderLocandina(card, modifier = Modifier.fillMaxSize())
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0x9914161A), Color(0xE614161A)),
+                        startY = 0f
+                    )
+                )
+        )
+        if (preferito) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = "Preferito",
+                    tint = accento,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = etichetta,
+                color = accento,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = card.title,
+                color = Color(0xFFF2F2F0),
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (percentuale > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(240.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x333A3F48))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(percentuale / 100f)
+                            .fillMaxHeight()
+                            .background(accento)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                    .onFocusChanged { pulsanteInfocato = it.isFocused }
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onClick)
+                    .background(accento)
+                    .border(
+                        2.dp,
+                        if (pulsanteInfocato) Color(0xFFF2F2F0) else Color.Transparent,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color(0xFF14161A),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(text = etichettaPulsante, color = Color(0xFF14161A), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }
 
-private fun etichettaSezione(sezione: SezioneHome, heroDaRiprendere: Boolean): String = when (sezione) {
-    SezioneHome.CONTINUA -> if (heroDaRiprendere) "Continua a guardare" else "Da riprendere"
-    else -> sezione.etichetta
+@Composable
+fun RigaContenuti(
+    titolo: String,
+    contenuti: List<ContentCard>,
+    visti: List<Visto>,
+    chiaveDaFocalizzare: String?,
+    focusRequester: FocusRequester?,
+    onClick: (ContentCard) -> Unit,
+    onLongClick: (ContentCard) -> Unit = {},
+    personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
+    /** Quando non null, la riga resta visibile (con questo messaggio) anche a contenuti vuoti;
+     * quando null, una riga vuota semplicemente non compare (comportamento delle righe di
+     * catalogo su Sfoglia/Cerca/Sport, dove una sezione vuota non aggiunge nulla da leggere). */
+    messaggioVuoto: String? = null
+) {
+    if (contenuti.isEmpty()) {
+        if (messaggioVuoto == null) return
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = titolo,
+                color = Color(0xFFF2F2F0),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+            Text(
+                text = messaggioVuoto,
+                color = Color(0xFF6D7380),
+                fontSize = 14.sp,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
+        }
+        return
+    }
+
+    val statoRiga = rememberLazyListState()
+    val indiceDaFocalizzare = contenuti.indexOfFirst { it.chiaveIdentita == chiaveDaFocalizzare }
+
+    LaunchedEffect(chiaveDaFocalizzare, contenuti) {
+        if (indiceDaFocalizzare > 0) statoRiga.scrollToItem(indiceDaFocalizzare)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            text = titolo,
+            color = Color(0xFFF2F2F0),
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
+        LazyRow(
+            state = statoRiga,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            // Il padding verticale lascia respirare la card in focus, ingrandita, senza tagliarla.
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
+        ) {
+            items(contenuti) { card ->
+                CardContenuto(
+                    card = card,
+                    percentuale = registroVisti.percentuale(visti, card.chiaveIdentita),
+                    preferito = elencoPreferiti.preferito(personalizzazioni, card),
+                    focusRequester = focusRequester.takeIf { card.chiaveIdentita == chiaveDaFocalizzare },
+                    onClick = { onClick(card) },
+                    onLongClick = { onLongClick(card) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SchermataVuota(messaggio: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF14161A))
+            .padding(32.dp)
+    ) {
+        Text(text = messaggio, color = Color(0xFF9AA0AA), fontSize = 16.sp)
+    }
 }
 
 private fun messaggioVuotoDi(tipo: TipoRiga): String = when (tipo) {
     TipoRiga.CONTINUA -> "Quello che guardi appare qui, per riprendere da dove avevi lasciato."
     TipoRiga.NUOVI_EPISODI ->
         "Segui una Serie (guardala o aggiungila ai Preferiti) per vedere qui i nuovi episodi."
-    TipoRiga.SUGGERITI -> "Aggiungi la chiave API di Claude dal Pannello Web per ricevere suggerimenti."
+    TipoRiga.SUGGERITI -> "Aggiungi la chiave API di Claude dalle Impostazioni per ricevere suggerimenti."
     TipoRiga.PREFERITI -> "Nessun Preferito ancora: aggiungine uno dalla sua pagina di Dettaglio."
-}
-
-/** Ancora usata da MainActivity per stati vuoti di altre schermate. */
-@Composable
-fun SchermataVuota(messaggio: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Colori.inchiostro)
-            .padding(Spazi.bordoSchermo)
-    ) {
-        Text(text = messaggio, style = Tipo.corpo, color = Colori.testoFioco, modifier = Modifier.width(560.dp))
-    }
 }

@@ -59,9 +59,7 @@ import com.ir0.iptv.app.settings.ImpostazioniRepository
 import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.app.sport.SportInEvidenza
 import com.ir0.iptv.app.theme.Accento
-import com.ir0.iptv.app.theme.Colori
 import com.ir0.iptv.app.theme.LocalAccento
-import com.ir0.iptv.app.theme.LocalSezione
 import com.ir0.iptv.app.webpanel.PonteTv
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
@@ -264,21 +262,8 @@ private fun ContentScreen(
     }
 
     val focusSidebarSezione = remember { FocusRequester() }
-    val canaliInEvidenza = remember(catalogoCorrente, personalizzazioni) {
-        // Le playlist M3U infilano righe separatore ("----Italia----") come voci: fuori dalla
-        // striscia "In onda ora", dove la prima voce dev'essere un canale vero.
-        val nonSeparatore = { c: ContentCard.Canale -> !Regex("^-{2,}.*-{2,}$").matches(c.title.trim()) }
-        elencoPreferiti.preferiti(catalogoCorrente, personalizzazioni)
-            .filterIsInstance<ContentCard.Canale>()
-            .filter(nonSeparatore)
-            .ifEmpty { catalogoCorrente.canali.filter(nonSeparatore).take(6) }
-            .take(6)
-    }
-    CompositionLocalProvider(
-        LocalAccento provides Accento.daNome(impostazioni.accento).colore,
-        LocalSezione provides destinazione.coloreSezione
-    ) {
-        Row(modifier = Modifier.fillMaxSize().background(Colori.inchiostro)) {
+    CompositionLocalProvider(LocalAccento provides Accento.daNome(impostazioni.accento).colore) {
+        Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
             Sidebar(
                 selezionata = destinazione,
                 onSeleziona = {
@@ -327,16 +312,11 @@ private fun ContentScreen(
                             personalizzazioni = personalizzazioni,
                             chiaveDaFocalizzare = chiaveDaFocalizzare,
                             catalogoVuoto = catalogoCorrente.isEmpty,
-                            canaliInEvidenza = canaliInEvidenza,
                             contenutoDiDefault = impostazioni.contenutoDiDefault,
                             ordine = remember(impostazioni.ordineHome) { SezioneHome.daSalvato(impostazioni.ordineHome) },
                             sport = partiteInEvidenza.take(2),
-                            onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { cardMenu = it },
-                            onApriConnessione = {
-                                destinazione = Destinazione.CONNESSIONE
-                                sovrapposte = emptyList()
-                            }
+                                onContenutoClick = { apri(it) },
+                            onContenutoLongClick = { cardMenu = it }
                         )
 
                         Destinazione.CANALI -> CanaliScreen(
