@@ -296,7 +296,11 @@ private fun ContentScreen(
                             onRiproduci = { richiesta, posizione, coda ->
                                 sovrapposte = sovrapposte + Screen.Player(richiesta, posizione, coda)
                             },
-                            onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
+                            onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) },
+                            onResetVisti = { chiavi ->
+                                vistoRepository.rimuoviVisti(chiavi)
+                                refreshDati++
+                            }
                         )
                     }
 

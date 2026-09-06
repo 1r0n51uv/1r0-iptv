@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,6 +56,8 @@ import coil.request.ImageRequest
 import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.classification.Episodio
+import com.ir0.iptv.domain.classification.Stagione
 import kotlinx.coroutines.delay
 
 /** Le azioni rapide su un contenuto, aperte tenendo premuto OK su una card. Cosa compare dipende
@@ -79,11 +82,130 @@ fun MenuContenuto(
     val haDettaglio = card is ContentCard.Film || card is ContentCard.SerieCard
     val primoFocus = remember { FocusRequester() }
 
+    MenuRapido(chiaveFocus = card, cover = card.imageUrl, titolo = card.title, onChiudi = onChiudi, primoFocus = primoFocus) {
+        var primoAssegnato = false
+        fun focusDiTesta(): FocusRequester? =
+            if (!primoAssegnato) primoFocus.also { primoAssegnato = true } else null
+
+        if (riproducibile) {
+            VoceMenu(
+                testo = if (haRipresa) "Riprendi" else "Riproduci",
+                icona = Icons.Filled.PlayArrow,
+                focusRequester = focusDiTesta(),
+                onClick = onRiproduci
+            )
+        }
+        if (card is ContentCard.Film && haRipresa) {
+            VoceMenu(
+                testo = "Riproduci dall'inizio",
+                icona = Icons.Filled.Replay,
+                focusRequester = focusDiTesta(),
+                onClick = onRiproduciDallInizio
+            )
+        }
+        if (riproducibile) {
+            VoceMenu(
+                testo = "Riproduci con…",
+                icona = Icons.AutoMirrored.Filled.Launch,
+                focusRequester = focusDiTesta(),
+                onClick = onRiproduciCon
+            )
+        }
+        if (haDettaglio) {
+            VoceMenu(
+                testo = "Apri dettaglio",
+                icona = Icons.Filled.Info,
+                focusRequester = focusDiTesta(),
+                onClick = onApriDettaglio
+            )
+        }
+        VoceMenu(
+            testo = if (preferito) "Rimuovi dai Preferiti" else "Aggiungi ai Preferiti",
+            icona = if (preferito) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            coloreIcona = if (preferito) LocalAccento.current else null,
+            focusRequester = focusDiTesta(),
+            onClick = onCambiaPreferito
+        )
+        if (inContinuaAGuardare) {
+            VoceMenu(
+                testo = "Togli da Continua a guardare",
+                icona = Icons.Filled.RemoveCircleOutline,
+                focusRequester = focusDiTesta(),
+                onClick = onRimuoviDaContinua
+            )
+        }
+    }
+}
+
+/** Le azioni rapide su un Episodio, aperte tenendo premuto OK sulla sua card nel Dettaglio Serie:
+ * "Riproduci con" c'e' sempre, "Segna come non visto" solo se l'Episodio ha un Visto. */
+@Composable
+fun MenuEpisodio(
+    episodio: Episodio,
+    copertina: String?,
+    haVisto: Boolean,
+    onRiproduciCon: () -> Unit,
+    onSegnaNonVisto: () -> Unit,
+    onChiudi: () -> Unit
+) {
+    val primoFocus = remember { FocusRequester() }
+    MenuRapido(chiaveFocus = episodio, cover = copertina, titolo = episodio.title, onChiudi = onChiudi, primoFocus = primoFocus) {
+        VoceMenu(
+            testo = "Riproduci con…",
+            icona = Icons.AutoMirrored.Filled.Launch,
+            focusRequester = primoFocus,
+            onClick = onRiproduciCon
+        )
+        if (haVisto) {
+            VoceMenu(
+                testo = "Segna come non visto",
+                icona = Icons.Filled.RemoveCircleOutline,
+                onClick = onSegnaNonVisto
+            )
+        }
+    }
+}
+
+/** L'unica azione rapida su una Stagione, aperta tenendo premuto OK sul suo selettore nel
+ * Dettaglio Serie: azzera i Visti di tutti i suoi Episodi. Il chiamante apre questo menu solo
+ * se la Stagione ha almeno un Visto, quindi non c'e' nulla da condizionare qui dentro. */
+@Composable
+fun MenuStagione(
+    stagione: Stagione,
+    titolo: String,
+    onSegnaNonVista: () -> Unit,
+    onChiudi: () -> Unit
+) {
+    val primoFocus = remember { FocusRequester() }
+    MenuRapido(chiaveFocus = stagione, cover = null, titolo = titolo, onChiudi = onChiudi, primoFocus = primoFocus) {
+        VoceMenu(
+            testo = "Segna stagione come non vista",
+            icona = Icons.Filled.RemoveCircleOutline,
+            focusRequester = primoFocus,
+            onClick = onSegnaNonVista
+        )
+    }
+}
+
+/**
+ * Il guscio comune ai menu rapidi (MenuContenuto, MenuEpisodio, MenuStagione): un Dialog cosi'
+ * il D-pad resta dentro il menu e BACK lo chiude, con la cover sfocata come sfondo e la stessa
+ * guardia "armato" contro la coda della pressione lunga che ha aperto il menu (vedi Pressabile).
+ */
+@Composable
+private fun MenuRapido(
+    chiaveFocus: Any,
+    cover: String?,
+    titolo: String,
+    onChiudi: () -> Unit,
+    primoFocus: FocusRequester,
+    contenuto: @Composable ColumnScope.() -> Unit
+) {
     Dialog(
         onDismissRequest = onChiudi,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        LaunchedEffect(card) { runCatching { primoFocus.requestFocus() } }
+        LaunchedEffect(chiaveFocus) { runCatching { primoFocus.requestFocus() } }
 
         // Il menu si apre mentre OK e' ancora premuto: la coda della pressione lunga (KeyDown
         // ripetuti + primo rilascio) va ignorata, altrimenti farebbe scattare da sola la prima
@@ -113,7 +235,6 @@ fun MenuContenuto(
                 .border(1.dp, Color(0xFF2E343E), forma)
         ) {
             // La cover del contenuto, sfocata, fa da sfondo al menu.
-            val cover = card.imageUrl
             if (cover != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
@@ -136,67 +257,16 @@ fun MenuContenuto(
                     )
             )
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
-            Text(
-                text = card.title,
-                color = Color(0xFFF2F2F0),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-
-            var primoAssegnato = false
-            fun focusDiTesta(): FocusRequester? =
-                if (!primoAssegnato) primoFocus.also { primoAssegnato = true } else null
-
-            if (riproducibile) {
-                VoceMenu(
-                    testo = if (haRipresa) "Riprendi" else "Riproduci",
-                    icona = Icons.Filled.PlayArrow,
-                    focusRequester = focusDiTesta(),
-                    onClick = onRiproduci
+                Text(
+                    text = titolo,
+                    color = Color(0xFFF2F2F0),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
-            }
-            if (card is ContentCard.Film && haRipresa) {
-                VoceMenu(
-                    testo = "Riproduci dall'inizio",
-                    icona = Icons.Filled.Replay,
-                    focusRequester = focusDiTesta(),
-                    onClick = onRiproduciDallInizio
-                )
-            }
-            if (riproducibile) {
-                VoceMenu(
-                    testo = "Riproduci con…",
-                    icona = Icons.AutoMirrored.Filled.Launch,
-                    focusRequester = focusDiTesta(),
-                    onClick = onRiproduciCon
-                )
-            }
-            if (haDettaglio) {
-                VoceMenu(
-                    testo = "Apri dettaglio",
-                    icona = Icons.Filled.Info,
-                    focusRequester = focusDiTesta(),
-                    onClick = onApriDettaglio
-                )
-            }
-            VoceMenu(
-                testo = if (preferito) "Rimuovi dai Preferiti" else "Aggiungi ai Preferiti",
-                icona = if (preferito) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                coloreIcona = if (preferito) LocalAccento.current else null,
-                focusRequester = focusDiTesta(),
-                onClick = onCambiaPreferito
-            )
-            if (inContinuaAGuardare) {
-                VoceMenu(
-                    testo = "Togli da Continua a guardare",
-                    icona = Icons.Filled.RemoveCircleOutline,
-                    focusRequester = focusDiTesta(),
-                    onClick = onRimuoviDaContinua
-                )
-            }
+                contenuto()
             }
         }
     }
@@ -206,7 +276,7 @@ fun MenuContenuto(
 private fun VoceMenu(
     testo: String,
     icona: ImageVector,
-    focusRequester: FocusRequester?,
+    focusRequester: FocusRequester? = null,
     coloreIcona: Color? = null,
     onClick: () -> Unit
 ) {
