@@ -9,5 +9,6 @@ enum class Destinazione(val etichetta: String) {
     CERCA("Cerca"),
     PREFERITI("Preferiti"),
     SPORT("Sport"),
+    CONNESSIONE("Connessione"),
     IMPOSTAZIONI("Impostazioni")
 }

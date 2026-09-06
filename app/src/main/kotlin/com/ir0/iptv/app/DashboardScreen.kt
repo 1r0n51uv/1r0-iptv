@@ -79,7 +79,11 @@ fun DashboardScreen(
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
     if (catalogoVuoto) {
-        SchermataVuota("Nessun contenuto trovato nelle Sorgenti configurate.")
+        SchermataVuota(
+            "Nessun contenuto trovato nelle Sorgenti configurate. Se un abbonamento è scaduto, " +
+                "apri Connessione nella barra laterale e inquadra il QR per aggiornare le credenziali " +
+                "dal Pannello Web."
+        )
         return
     }
 

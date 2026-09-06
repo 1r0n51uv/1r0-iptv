@@ -1,5 +1,6 @@
 package com.ir0.iptv.app
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,7 +39,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,6 +79,19 @@ import com.ir0.iptv.domain.playback.Visto
 private val registro = RegistroVisti()
 private val resolver = ProssimaVisioneResolver()
 private val navigazione = NavigazioneSerie()
+
+/**
+ * Riporta la pagina di Dettaglio in cima, tenendocela per qualche frame: dare il focus al
+ * pulsante Play innesca un bring-into-view che sposta la pagina e taglia la cover, e sopra il
+ * pulsante non c'è nulla di focusabile con cui risalire col D-pad. Il ciclo su più frame ha la
+ * meglio su quell'animazione, che può ripartire subito dopo il primo scrollTo.
+ */
+private suspend fun ScrollState.riportaInCimaPerQualcheFrame() {
+    repeat(6) {
+        withFrameNanos {}
+        if (value != 0) scrollTo(0)
+    }
+}
 
 @Composable
 fun DetailScreen(
@@ -132,14 +149,15 @@ private fun DettaglioFilm(
     val posizione = registro.posizioneDiRipresa(visti, card.chiaveIdentita)
     val percentuale = registro.percentuale(visti, card.chiaveIdentita)
     val focusPrincipale = remember(card) { FocusRequester() }
-    LaunchedEffect(card) { runCatching { focusPrincipale.requestFocus() } }
 
     var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
     LaunchedEffect(card) {
         dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
     }
 
-    Pagina(sfondo = card.imageUrl) {
+    Pagina(sfondo = card.imageUrl, focusIniziale = focusPrincipale, chiaveRifocus = card.chiaveIdentita) { statoScorrimento ->
+        val scope = rememberCoroutineScope()
+        val riportaInCima: () -> Unit = { scope.launch { statoScorrimento.riportaInCimaPerQualcheFrame() } }
         Testata(
             copertina = card.imageUrl,
             etichetta = "FILM",
@@ -155,6 +173,7 @@ private fun DettaglioFilm(
                 principale = true,
                 icona = Icons.Filled.PlayArrow,
                 focusRequester = focusPrincipale,
+                onInfocato = riportaInCima,
                 onClick = { onRiproduci(richiesta, posizione ?: 0L, emptyList()) }
             )
             PulsantePreferito(preferito, onCambiaPreferito)
@@ -181,8 +200,6 @@ private fun DettaglioSerie(
         mutableStateOf(navigazione.stagioneIniziale(serie, visti))
     }
     val focusPrincipale = remember(serie) { FocusRequester() }
-    // All'apertura del Dettaglio il D-pad parte sul pulsante Play/Riprendi.
-    LaunchedEffect(prossima) { runCatching { focusPrincipale.requestFocus() } }
 
     val primoEpisodio = serie.seasons.flatMap { it.episodes }.firstOrNull()
 
@@ -218,7 +235,13 @@ private fun DettaglioSerie(
     fun codaDopo(episodio: Episodio): List<RichiestaRiproduzione> =
         navigazione.episodiSuccessivi(serie, episodio.url).map(::richiestaDi)
 
-    Pagina(sfondo = serie.poster ?: card.imageUrl) {
+    Pagina(
+        sfondo = serie.poster ?: card.imageUrl,
+        focusIniziale = focusPrincipale,
+        chiaveRifocus = prossima
+    ) { statoScorrimento ->
+        val scope = rememberCoroutineScope()
+        val riportaInCima: () -> Unit = { scope.launch { statoScorrimento.riportaInCimaPerQualcheFrame() } }
         Testata(
             copertina = serie.poster ?: card.imageUrl,
             etichetta = "SERIE",
@@ -236,6 +259,7 @@ private fun DettaglioSerie(
                     principale = true,
                     icona = Icons.Filled.PlayArrow,
                     focusRequester = focusPrincipale,
+                    onInfocato = riportaInCima,
                     onClick = {
                         onRiproduci(
                             richiestaDi(prossima.episodio),
@@ -250,6 +274,7 @@ private fun DettaglioSerie(
                     principale = true,
                     icona = Icons.Filled.PlayArrow,
                     focusRequester = focusPrincipale,
+                    onInfocato = riportaInCima,
                     onClick = {
                         onRiproduci(richiestaDi(prossima.episodio), 0L, codaDopo(prossima.episodio))
                     }
@@ -262,6 +287,7 @@ private fun DettaglioSerie(
                             principale = true,
                             icona = Icons.Filled.PlayArrow,
                             focusRequester = focusPrincipale,
+                            onInfocato = riportaInCima,
                             onClick = { onRiproduci(richiestaDi(primoEpisodio), 0L, codaDopo(primoEpisodio)) }
                         )
                     }
@@ -304,8 +330,30 @@ private fun DettaglioSerie(
     }
 }
 
+/**
+ * @param focusIniziale pulsante su cui portare il D-pad all'apertura (Play/Riprendi).
+ * @param chiaveRifocus quando cambia, si rifà il focus iniziale (es. si torna dal player e la
+ *   prossima visione è diversa).
+ * @param contenuto riceve lo [ScrollState] della pagina: il pulsante principale lo usa per
+ *   riportare in cima la cover ogni volta che prende il focus (all'apertura e risalendo dagli
+ *   episodi), visto che sopra di lui non c'è nulla di focusabile con cui scorrere all'insù.
+ */
 @Composable
-private fun Pagina(sfondo: String? = null, contenuto: @Composable () -> Unit) {
+private fun Pagina(
+    sfondo: String? = null,
+    focusIniziale: FocusRequester? = null,
+    chiaveRifocus: Any? = null,
+    contenuto: @Composable (ScrollState) -> Unit
+) {
+    val statoScorrimento = rememberScrollState()
+    if (focusIniziale != null) {
+        LaunchedEffect(focusIniziale, chiaveRifocus) {
+            withFrameNanos {}
+            // Il focus sul pulsante principale fa scattare da solo `riportaInCima` (onInfocato),
+            // che rimette la cover in cima.
+            runCatching { focusIniziale.requestFocus() }
+        }
+    }
     MaterialTheme {
         Surface(color = Color(0xFF14161A)) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -333,11 +381,11 @@ private fun Pagina(sfondo: String? = null, contenuto: @Composable () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(statoScorrimento)
                         .padding(36.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    contenuto()
+                    contenuto(statoScorrimento)
                 }
             }
         }
@@ -442,6 +490,7 @@ private fun PulsanteAzione(
     principale: Boolean = false,
     icona: ImageVector? = null,
     focusRequester: FocusRequester? = null,
+    onInfocato: () -> Unit = {},
     onClick: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
@@ -457,7 +506,10 @@ private fun PulsanteAzione(
         modifier = Modifier
             .widthIn(max = 420.dp)
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-            .onFocusChanged { infocato = it.isFocused }
+            .onFocusChanged {
+                infocato = it.isFocused
+                if (it.isFocused) onInfocato()
+            }
             .clickable(onClick = onClick)
             .background(sfondo, RoundedCornerShape(8.dp))
             .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
@@ -656,7 +708,7 @@ private fun BarraProgresso(percentuale: Int, modifier: Modifier = Modifier) {
 
 @Composable
 private fun DettaglioErrore(titolo: String) {
-    Pagina {
+    Pagina { _ ->
         Text(text = titolo, color = Color(0xFFF2F2F0), fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(
             text = "Impossibile caricare i dettagli di questo contenuto.",

@@ -1,5 +1,7 @@
 package com.ir0.iptv.app
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import com.ir0.iptv.domain.catalog.ContentCard
@@ -61,8 +64,22 @@ fun CardContenuto(
     var infocata by remember { mutableStateOf(false) }
     val larghezza = if (card.locandinaVerticale) LARGHEZZA_CARD_VERTICALE else LARGHEZZA_CARD_ORIZZONTALE
     val altezza = if (card.locandinaVerticale) ALTEZZA_CARD_VERTICALE else ALTEZZA_CARD_ORIZZONTALE
+    // La card in focus e' ingrandita da `zoomInFocus` e sconfina sulle vicine: senza alzarne
+    // l'ordine di disegno la sua meta' verso la card successiva (bordo e ombra inclusi) finisce
+    // coperta dalla vicina, e nel passaggio orizzontale da una card all'altra si vede uno sfarfallio.
+    // L'elevazione resta > 0 finche' l'animazione di rientro non e' finita, cosi' anche la card
+    // che perde il focus rimpicciolisce sopra le vicine a riposo, non sotto.
+    val elevazione by animateFloatAsState(
+        targetValue = if (infocata) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "cardElevazione"
+    )
     Column(
-        modifier = Modifier.width(larghezza),
+        modifier = Modifier
+            .width(larghezza)
+            // Card in focus sempre in cima; quella che sta rientrando resta sopra le vicine a
+            // riposo finche' l'animazione non finisce.
+            .zIndex(if (infocata) 2f else elevazione),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val forma = RoundedCornerShape(8.dp)

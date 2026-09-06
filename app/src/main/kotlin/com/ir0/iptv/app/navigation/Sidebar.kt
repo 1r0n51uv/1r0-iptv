@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
@@ -87,6 +88,7 @@ private fun iconaDi(destinazione: Destinazione): ImageVector = when (destinazion
     Destinazione.CERCA -> Icons.Filled.Search
     Destinazione.PREFERITI -> Icons.Filled.Favorite
     Destinazione.SPORT -> Icons.Filled.SportsSoccer
+    Destinazione.CONNESSIONE -> Icons.Filled.QrCode2
     Destinazione.IMPOSTAZIONI -> Icons.Filled.Settings
 }
 

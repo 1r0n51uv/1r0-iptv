@@ -164,8 +164,16 @@ private fun ContentScreen(
     // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
     // senza dover cambiare schermata.
     var refreshDati by remember { mutableStateOf(0) }
-    BackHandler(enabled = sovrapposte.isNotEmpty()) {
-        sovrapposte = sovrapposte.dropLast(1)
+    // Back resta sempre dentro l'app: prima chiude le schermate aperte sopra (Dettaglio,
+    // player), poi riporta alla Dashboard da qualsiasi sezione della Sidebar, infine — sulla
+    // Dashboard, radice dell'app — non fa nulla. Lasciare che Back finisse l'Activity faceva
+    // ricomparire la schermata di caricamento del catalogo al rientro; si esce con HOME.
+    BackHandler {
+        when {
+            sovrapposte.isNotEmpty() -> sovrapposte = sovrapposte.dropLast(1)
+            destinazione != Destinazione.DASHBOARD -> destinazione = Destinazione.DASHBOARD
+            else -> Unit
+        }
     }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
@@ -363,6 +371,10 @@ private fun ContentScreen(
                             personalizzazioni = personalizzazioni,
                             onContenutoClick = { apri(it) },
                             onContenutoLongClick = { cardMenu = it }
+                        )
+
+                        Destinazione.CONNESSIONE -> ConnessioneScreen(
+                            indirizzo = remember { localWebPanelAddress() }
                         )
 
                         Destinazione.IMPOSTAZIONI -> ImpostazioniScreen(

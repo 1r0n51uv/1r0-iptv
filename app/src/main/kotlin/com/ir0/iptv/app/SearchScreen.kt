@@ -16,10 +16,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -40,6 +42,10 @@ private val ricerca = RicercaCatalogo()
 private val registro = RegistroVisti()
 private val elencoPreferiti = ElencoPreferiti()
 
+/** Pausa dopo l'ultimo tasto prima di far partire la ricerca: si evita di scandire il catalogo
+ * a ogni carattere mentre si sta ancora digitando col telecomando. */
+private const val RITARDO_RICERCA_MS = 300L
+
 @Composable
 fun SearchScreen(
     catalogo: ContentCatalog,
@@ -49,8 +55,19 @@ fun SearchScreen(
     onContenutoLongClick: (ContentCard) -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
+    var queryCercata by remember { mutableStateOf("") }
     var infocato by remember { mutableStateOf(false) }
-    val risultati = remember(query, catalogo) { ricerca.cerca(catalogo, query) }
+    // La ricerca parte solo quando la digitazione si ferma per un attimo; svuotare il campo
+    // ripulisce subito i risultati, senza attesa.
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            queryCercata = ""
+            return@LaunchedEffect
+        }
+        delay(RITARDO_RICERCA_MS)
+        queryCercata = query
+    }
+    val risultati = remember(queryCercata, catalogo) { ricerca.cerca(catalogo, queryCercata) }
     val canali = remember(risultati) { risultati.filterIsInstance<ContentCard.Canale>() }
     val film = remember(risultati) { risultati.filterIsInstance<ContentCard.Film>() }
     val serie = remember(risultati) { risultati.filterIsInstance<ContentCard.SerieCard>() }
@@ -95,8 +112,12 @@ fun SearchScreen(
                 modifier = Modifier.padding(horizontal = 32.dp)
             )
 
+            // Primo carattere ancora dentro la pausa di debounce: niente messaggio, per non
+            // far lampeggiare "nessun risultato" prima ancora di aver cercato.
+            queryCercata.isBlank() -> Unit
+
             risultati.isEmpty() -> Text(
-                text = "Nessun risultato per \"$query\".",
+                text = "Nessun risultato per \"$queryCercata\".",
                 color = Color(0xFF9AA0AA),
                 fontSize = 15.sp,
                 modifier = Modifier.padding(horizontal = 32.dp)
