@@ -58,6 +58,7 @@ import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.content.DettaglioCache
 import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.domain.catalog.ContentCard
@@ -92,10 +93,12 @@ fun DetailScreen(
             DettaglioSerie(card, card.serie, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon)
 
         is ContentCard.SerieCard.DaCaricare -> {
-            var serie by remember(card) { mutableStateOf<Serie?>(null) }
+            var serie by remember(card) { mutableStateOf(DettaglioCache.serie(card.chiaveIdentita)) }
             var fallita by remember(card) { mutableStateOf(false) }
             LaunchedEffect(card) {
+                if (serie != null) return@LaunchedEffect
                 val risultato = ContentFetcher().dettaglioSerie(card)
+                if (risultato != null) DettaglioCache.salvaSerie(card.chiaveIdentita, risultato)
                 serie = risultato
                 fallita = risultato == null
             }
@@ -134,11 +137,17 @@ private fun DettaglioFilm(
     val focusPrincipale = remember(card) { FocusRequester() }
     LaunchedEffect(card) { runCatching { focusPrincipale.requestFocus() } }
 
-    var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
+    var dettagli by remember(card) { mutableStateOf(DettaglioCache.film(card.chiaveIdentita)) }
     // Le Sorgenti M3U non hanno un DettaglioEsteso da recuperare: niente scheletro per loro.
-    var caricandoDettagli by remember(card) { mutableStateOf(card.xtream != null) }
+    var caricandoDettagli by remember(card) { mutableStateOf(dettagli == null && card.xtream != null) }
     LaunchedEffect(card) {
-        dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+        if (dettagli != null) {
+            caricandoDettagli = false
+            return@LaunchedEffect
+        }
+        val risultato = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+        if (risultato != null) DettaglioCache.salvaFilm(card.chiaveIdentita, risultato)
+        dettagli = risultato
         caricandoDettagli = false
     }
 

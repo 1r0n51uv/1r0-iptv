@@ -45,6 +45,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.content.DettaglioCache
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.dashboard.NuoviEpisodi
 import com.ir0.iptv.app.dashboard.NuoviEpisodiRepository
@@ -148,6 +149,8 @@ private fun ContentScreen(
         // riporterebbe allo scheletro di caricamento ad ogni refresh.
         val aggiornato = ContentFetcher().catalogo(sorgenti)
         catalogo = aggiornato
+        // Una Serie in cache potrebbe avere nuovi Episodi arrivati proprio con questo refresh.
+        DettaglioCache.pulisci()
         inAggiornamento = false
     }
     val catalogoCorrente = catalogo
