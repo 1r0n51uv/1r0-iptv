@@ -45,16 +45,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.DettaglioEsteso
@@ -135,7 +139,7 @@ private fun DettaglioFilm(
         dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
     }
 
-    Pagina {
+    Pagina(sfondo = card.imageUrl) {
         Testata(
             copertina = card.imageUrl,
             etichetta = "FILM",
@@ -214,7 +218,7 @@ private fun DettaglioSerie(
     fun codaDopo(episodio: Episodio): List<RichiestaRiproduzione> =
         navigazione.episodiSuccessivi(serie, episodio.url).map(::richiestaDi)
 
-    Pagina {
+    Pagina(sfondo = serie.poster ?: card.imageUrl) {
         Testata(
             copertina = serie.poster ?: card.imageUrl,
             etichetta = "SERIE",
@@ -301,18 +305,40 @@ private fun DettaglioSerie(
 }
 
 @Composable
-private fun Pagina(contenuto: @Composable () -> Unit) {
+private fun Pagina(sfondo: String? = null, contenuto: @Composable () -> Unit) {
     MaterialTheme {
         Surface(color = Color(0xFF14161A)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF14161A))
-                    .verticalScroll(rememberScrollState())
-                    .padding(36.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                contenuto()
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (sfondo != null) {
+                    // La cover del contenuto, sfocata e fissa, fa da sfondo alla pagina.
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(sfondo)
+                            .transformations(DownsampleBlurTransformation(targetWidth = 360, radius = 6, passes = 2))
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0xCC14161A), Color(0xF214161A))
+                                )
+                            )
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(36.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    contenuto()
+                }
             }
         }
     }
