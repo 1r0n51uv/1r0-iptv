@@ -22,10 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -47,7 +50,11 @@ fun PlayerScreen(
     onProgresso: (posizioneMs: Long, durataMs: Long) -> Unit = { _, _ -> },
     /** Chiamato quando la riproduzione arriva in fondo: chi ascolta fa partire il prossimo
      * Episodio, se c'e'. Non scatta su stop manuale o su errore. */
-    onRiproduzioneTerminata: () -> Unit = {}
+    onRiproduzioneTerminata: () -> Unit = {},
+    /** Chiamato quando l'app va in background mentre questo Player e' aperto: la riproduzione si
+     * ferma esplicitamente (oggi Android non lo garantisce da solo), e chi ascolta puo' ricordarsi
+     * dove riprendere alla riapertura invece di tornare sempre alla Dashboard. */
+    onVaInBackground: (posizioneMs: Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scopeRitentativo = rememberCoroutineScope()
@@ -110,6 +117,22 @@ fun PlayerScreen(
             }
             exoPlayer.release()
         }
+    }
+
+    // L'Activity va in background (Home, multitasking, schermo spento) senza che la
+    // composizione si smonti: senza questo la riproduzione continuerebbe non vista finche'
+    // Android non decide da solo di liberare risorse, il che non e' garantito ne' immediato.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(exoPlayer, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.playWhenReady = false
+                if (tracciaProgresso) onProgresso(exoPlayer.currentPosition, exoPlayer.durataNota())
+                onVaInBackground(exoPlayer.currentPosition)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     MaterialTheme {

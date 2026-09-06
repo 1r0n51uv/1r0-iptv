@@ -53,6 +53,7 @@ import com.ir0.iptv.app.navigation.Destinazione
 import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
+import com.ir0.iptv.app.playback.UltimoPlayerRepository
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.settings.Impostazioni
 import com.ir0.iptv.app.settings.ImpostazioniRepository
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
+        val ultimoPlayerRepository = UltimoPlayerRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
@@ -116,6 +118,7 @@ class MainActivity : ComponentActivity() {
                 ContentScreen(
                     sorgenti = sorgenti,
                     vistoRepository = vistoRepository,
+                    ultimoPlayerRepository = ultimoPlayerRepository,
                     personalizzazioneRepository = personalizzazioneRepository,
                     impostazioniRepository = impostazioniRepository,
                     nuoviEpisodi = nuoviEpisodi,
@@ -132,6 +135,7 @@ class MainActivity : ComponentActivity() {
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
     vistoRepository: VistoRepository,
+    ultimoPlayerRepository: UltimoPlayerRepository,
     personalizzazioneRepository: PersonalizzazioneRepository,
     impostazioniRepository: ImpostazioniRepository,
     nuoviEpisodi: NuoviEpisodi,
@@ -158,7 +162,16 @@ private fun ContentScreen(
 
     var impostazioni by remember { mutableStateOf(impostazioniRepository.leggi()) }
     var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
-    var sovrapposte by remember { mutableStateOf(listOf<Screen>()) }
+    // Se l'app e' stata chiusa mentre un Player era aperto, si riapre direttamente li' invece
+    // che sulla Dashboard; da quel Player, Indietro svuota lo stack e torna alla Dashboard
+    // (sotto non c'e' nessun Dettaglio da ricostruire).
+    var sovrapposte by remember {
+        mutableStateOf(
+            ultimoPlayerRepository.leggi()?.let { (richiesta, posizione) ->
+                listOf<Screen>(Screen.Player(richiesta, posizione))
+            } ?: emptyList()
+        )
+    }
     // Il contenuto per cui e' aperto il menu rapido (pressione lunga su una card).
     var cardMenu by remember { mutableStateOf<ContentCard?>(null) }
     // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
@@ -166,6 +179,12 @@ private fun ContentScreen(
     var refreshDati by remember { mutableStateOf(0) }
     BackHandler(enabled = sovrapposte.isNotEmpty()) {
         sovrapposte = sovrapposte.dropLast(1)
+    }
+    // L'ultimo Player si dimentica appena l'utente ne esce, cosi' una riapertura successiva
+    // (senza essere passati di nuovo dal background mentre si guardava qualcosa) non ripropone
+    // un contenuto che l'utente aveva gia' lasciato volontariamente.
+    LaunchedEffect(sovrapposte) {
+        if (sovrapposte.lastOrNull() !is Screen.Player) ultimoPlayerRepository.pulisci()
     }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
@@ -248,6 +267,9 @@ private fun ContentScreen(
                     sovrapposte = sovrapposte.dropLast(1) +
                         Screen.Player(prossima, 0L, sopra.coda.drop(1))
                 }
+            },
+            onVaInBackground = { posizioneMs ->
+                ultimoPlayerRepository.salva(sopra.richiesta, posizioneMs)
             }
         )
         return
