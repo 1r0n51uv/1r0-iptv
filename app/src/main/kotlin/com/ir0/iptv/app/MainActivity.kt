@@ -254,12 +254,14 @@ private fun ContentScreen(
         PlayerScreen(
             richiesta = sopra.richiesta,
             posizioneIniziale = sopra.posizioneIniziale,
+            haProssimoEpisodio = sopra.coda.isNotEmpty(),
             onProgresso = { posizioneMs, durataMs ->
                 vistoRepository.registraProgresso(sopra.richiesta, posizioneMs, durataMs)
             },
-            onRiproduzioneTerminata = {
-                // A fine Episodio parte da solo il successivo (anche di una Stagione dopo),
-                // scalando la coda. Senza coda (Film, Canale, ultimo Episodio) non succede nulla.
+            onProssimoEpisodio = {
+                // Scatta a fine Episodio (parte da solo il successivo, anche di una Stagione
+                // dopo) o dal pulsante "Prossimo episodio" nei controlli. Senza coda (Film,
+                // Canale, ultimo Episodio) non succede nulla.
                 sopra.coda.firstOrNull()?.let { prossima ->
                     sovrapposte = sovrapposte.dropLast(1) +
                         Screen.Player(prossima, 0L, sopra.coda.drop(1))
