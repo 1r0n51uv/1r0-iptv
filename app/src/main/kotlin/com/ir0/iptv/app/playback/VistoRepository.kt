@@ -47,6 +47,13 @@ class VistoRepository(
         file.writeText(JSONArray(restanti.map { it.toJson() }).toString())
     }
 
+    /** Toglie i Visti la cui Chiave di Identita' e' tra quelle date: un singolo Episodio
+     * (un insieme di una Chiave) o un'intera Stagione (le Chiavi di tutti i suoi Episodi). */
+    @Synchronized
+    fun rimuoviVisti(chiavi: Set<String>) {
+        file.writeText(JSONArray(elenco().filterNot { it.chiaveIdentita in chiavi }.map { it.toJson() }).toString())
+    }
+
     @Synchronized
     fun registraProgresso(richiesta: RichiestaRiproduzione, posizioneMs: Long, durataMs: Long) {
         val tipo = richiesta.tipo ?: return
