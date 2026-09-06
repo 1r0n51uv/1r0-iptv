@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.content.CatalogoRepository
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.dashboard.NuoviEpisodi
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
+        val catalogoRepository = CatalogoRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
@@ -115,6 +117,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 ContentScreen(
                     sorgenti = sorgenti,
+                    catalogoRepository = catalogoRepository,
                     vistoRepository = vistoRepository,
                     personalizzazioneRepository = personalizzazioneRepository,
                     impostazioniRepository = impostazioniRepository,
@@ -131,6 +134,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
+    catalogoRepository: CatalogoRepository,
     vistoRepository: VistoRepository,
     personalizzazioneRepository: PersonalizzazioneRepository,
     impostazioniRepository: ImpostazioniRepository,
@@ -139,7 +143,13 @@ private fun ContentScreen(
     sportInEvidenza: SportInEvidenza
 ) {
     val context = LocalContext.current
-    var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
+    // La copia locale (ADR 0008) si legge subito, cosi' un avvio a freddo mostra qualcosa
+    // invece di aspettare la rete; resta null solo se non e' mai stata salvata una volta.
+    var catalogo by remember(sorgenti) { mutableStateOf(catalogoRepository.leggi()) }
+    // Il catalogo appena scaricato dalla rete, distinto da quello a schermo: tiene le righe
+    // Nuovi episodi/Suggeriti/Sport (chiamate a pagamento o a rate limitato) legate a un vero
+    // fetch, cosi' non ripartono anche per la sola copia locale mostrata all'avvio.
+    var catalogoScaricato by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     var richiesteDiAggiornamento by remember(sorgenti) { mutableStateOf(0) }
     var inAggiornamento by remember(sorgenti) { mutableStateOf(false) }
     LaunchedEffect(sorgenti, richiesteDiAggiornamento) {
@@ -148,6 +158,8 @@ private fun ContentScreen(
         // riporterebbe allo scheletro di caricamento ad ogni refresh.
         val aggiornato = ContentFetcher().catalogo(sorgenti)
         catalogo = aggiornato
+        catalogoScaricato = aggiornato
+        catalogoRepository.salva(aggiornato)
         inAggiornamento = false
     }
     val catalogoCorrente = catalogo
@@ -174,26 +186,27 @@ private fun ContentScreen(
     val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente, refreshDati) {
         personalizzazioneRepository.elenco()
     }
-    var rigaNuoviEpisodi by remember(catalogoCorrente) {
+    var rigaNuoviEpisodi by remember(catalogoScaricato) {
         mutableStateOf(RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList()))
     }
-    var rigaSuggeriti by remember(catalogoCorrente) {
+    var rigaSuggeriti by remember(catalogoScaricato) {
         mutableStateOf(RigaDashboard(TipoRiga.SUGGERITI, emptyList()))
     }
-    var partiteInEvidenza by remember(catalogoCorrente) { mutableStateOf(emptyList<PartitaConCanale>()) }
-    LaunchedEffect(catalogoCorrente) {
-        rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
+    var partiteInEvidenza by remember(catalogoScaricato) { mutableStateOf(emptyList<PartitaConCanale>()) }
+    LaunchedEffect(catalogoScaricato) {
+        val scaricato = catalogoScaricato ?: return@LaunchedEffect
+        rigaNuoviEpisodi = nuoviEpisodi.riga(scaricato, visti, personalizzazioni)
             ?: RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList())
         rigaSuggeriti = suggerimentiAi.riga(
             chiaveApi = impostazioni.chiaveApiAi,
-            catalogo = catalogoCorrente,
+            catalogo = scaricato,
             visti = visti,
             personalizzazioni = personalizzazioni
         ) ?: RigaDashboard(TipoRiga.SUGGERITI, emptyList())
         partiteInEvidenza = sportInEvidenza.partite(
             attivo = impostazioni.sportInDashboard,
             chiaveApi = impostazioni.chiaveApiSport,
-            canali = catalogoCorrente.canali,
+            canali = scaricato.canali,
             limite = 20
         )
     }

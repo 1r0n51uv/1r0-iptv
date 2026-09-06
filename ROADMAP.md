@@ -53,6 +53,20 @@ trade-off reale dietro sono in [`docs/adr/`](docs/adr/).
 - [x] **Caricamento**: scheletro delle righe al posto della scritta al centro.
 - [x] **Aggiorna catalogo**: voce in fondo alla Sidebar; il catalogo vecchio resta a schermo durante l'aggiornamento.
 
+## Fase 9 — Player, cronologia e caricamento
+
+Nata da una sessione di grilling su bug e rifiniture raccolte dopo l'uso reale dell'app.
+
+- [ ] **Overlay controlli player**: overlay custom per TV al posto dei controlli di default di Media3 (ADR 0007). Sinistra/destra saltano sempre avanti/indietro di un passo fisso con un indicatore visivo; su' porta il focus sul pulsante "Prossimo episodio" (quando c'e' un Episodio in coda), centro conferma o alterna play/pausa. Risolve anche il player bloccato sull'ultimo frame a fine episodio (il `PlayerView` non viene mai ri-agganciato al nuovo `ExoPlayer` quando la coda avanza).
+- [x] **Reset Visto granulare**: rimozione del Visto per singolo Episodio, per intera Stagione o per intera Serie, esposta con la stessa pressione lunga già usata sulle card altrove nell'app. Nessun reset globale "cancella tutto". Per Episodio e Stagione, che non avevano ancora nessun menu contestuale, la pressione lunga apre un piccolo menu dedicato (`MenuEpisodio`, `MenuStagione`); per la Serie resta quello già esistente sulle card di Dashboard/Sfoglia.
+- [x] **Skeleton sul Dettaglio Film**: come già presente sul Dettaglio Serie, mentre arrivano trama e metadati estesi. Il pannello cast/regista/genere mostra uno scheletro finché il DettaglioEsteso non arriva (solo Sorgenti Xtream); resta vuoto, senza scheletro, per le Sorgenti M3U che non lo forniscono affatto.
+- [x] **Cache di sessione sul Dettaglio**: i dati di Stagioni/Episodi di una Serie e i metadati estesi di un Film restano in memoria (`DettaglioCache`) per la sessione corrente, invece di essere ricaricati da zero ogni volta che si torna dal Player. Svuotata ad ogni "Aggiorna catalogo", cosi' una Serie con Nuovi episodi non resta bloccata sui dati vecchi.
+- [x] **Copia locale del catalogo**: catalogo testuale persistito su disco (`CatalogoRepository`, ADR 0008), letto subito all'avvio invece di attendere la rete — il fetch dalla Sorgente parte comunque subito dopo e sostituisce la copia locale non appena pronto, stessa logica di "il catalogo vecchio resta a schermo" gia' usata per "Aggiorna catalogo". Il pulsante "Aggiorna catalogo" in Sidebar ruota mentre una sincronizzazione e' in corso, automatica o manuale. Le righe Nuovi episodi/Suggeriti AI/Sport restano legate a un vero fetch di rete (mai alla sola copia locale), per non raddoppiare le chiamate a pagamento o soggette a rate limit ad ogni avvio.
+- [ ] **Esclusione dalla sincronizzazione dal Pannello Web**: poter escludere dalla sincronizzazione automatica un'intera Sorgente, una categoria o un singolo contenuto, per alleggerire il caricamento. Non ancora implementato: richiede un nuovo endpoint nel Pannello Web, impostazioni persistite e un filtro nella costruzione del catalogo — scorporato dalla copia locale del catalogo perche' e' un lavoro a se', piu' grosso.
+- [ ] **Lifecycle app**: la riproduzione si ferma esplicitamente quando l'app va in background (oggi nessun codice di lifecycle, comportamento casuale); riaprendo l'app si torna direttamente sul Player con lo stesso contenuto e la stessa posizione — da lì Indietro va alla Dashboard, senza ricostruire l'intero stack di navigazione.
+
+Parcheggiato: **Suggeriti da AI** — cache/rate-limiting delle chiamate e pulsante di rigenerazione manuale, da riprendere dopo aver provato la funzione esistente sul dispositivo reale.
+
 ## Da verificare sulla TV
 
 Il modulo `:app` non è compilabile nell'ambiente in cui è stato scritto (l'Android Gradle
