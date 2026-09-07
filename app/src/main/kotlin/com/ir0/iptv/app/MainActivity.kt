@@ -44,7 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.content.CatalogoRepository
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.content.DettaglioCache
 import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.dashboard.NuoviEpisodi
 import com.ir0.iptv.app.dashboard.NuoviEpisodiRepository
@@ -53,6 +55,7 @@ import com.ir0.iptv.app.navigation.Destinazione
 import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
+import com.ir0.iptv.app.playback.UltimoPlayerRepository
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.settings.Impostazioni
 import com.ir0.iptv.app.settings.ImpostazioniRepository
@@ -95,7 +98,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sorgenteRepository = SorgenteRepository(applicationContext)
+        val catalogoRepository = CatalogoRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
+        val ultimoPlayerRepository = UltimoPlayerRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
@@ -122,7 +127,9 @@ class MainActivity : ComponentActivity() {
             } else {
                 ContentScreen(
                     sorgenti = sorgenti,
+                    catalogoRepository = catalogoRepository,
                     vistoRepository = vistoRepository,
+                    ultimoPlayerRepository = ultimoPlayerRepository,
                     personalizzazioneRepository = personalizzazioneRepository,
                     impostazioniRepository = impostazioniRepository,
                     nuoviEpisodi = nuoviEpisodi,
@@ -138,7 +145,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
+    catalogoRepository: CatalogoRepository,
     vistoRepository: VistoRepository,
+    ultimoPlayerRepository: UltimoPlayerRepository,
     personalizzazioneRepository: PersonalizzazioneRepository,
     impostazioniRepository: ImpostazioniRepository,
     nuoviEpisodi: NuoviEpisodi,
@@ -146,7 +155,13 @@ private fun ContentScreen(
     sportInEvidenza: SportInEvidenza
 ) {
     val context = LocalContext.current
-    var catalogo by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
+    // La copia locale (ADR 0008) si legge subito, cosi' un avvio a freddo mostra qualcosa
+    // invece di aspettare la rete; resta null solo se non e' mai stata salvata una volta.
+    var catalogo by remember(sorgenti) { mutableStateOf(catalogoRepository.leggi()) }
+    // Il catalogo appena scaricato dalla rete, distinto da quello a schermo: tiene le righe
+    // Nuovi episodi/Suggeriti/Sport (chiamate a pagamento o a rate limitato) legate a un vero
+    // fetch, cosi' non ripartono anche per la sola copia locale mostrata all'avvio.
+    var catalogoScaricato by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     var richiesteDiAggiornamento by remember(sorgenti) { mutableStateOf(0) }
     var inAggiornamento by remember(sorgenti) { mutableStateOf(false) }
     LaunchedEffect(sorgenti, richiesteDiAggiornamento) {
@@ -155,6 +170,10 @@ private fun ContentScreen(
         // riporterebbe allo scheletro di caricamento ad ogni refresh.
         val aggiornato = ContentFetcher().catalogo(sorgenti)
         catalogo = aggiornato
+        catalogoScaricato = aggiornato
+        catalogoRepository.salva(aggiornato)
+        // Una Serie in cache potrebbe avere nuovi Episodi arrivati proprio con questo refresh.
+        DettaglioCache.pulisci()
         inAggiornamento = false
     }
     val catalogoCorrente = catalogo
@@ -165,7 +184,16 @@ private fun ContentScreen(
 
     var impostazioni by remember { mutableStateOf(impostazioniRepository.leggi()) }
     var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
-    var sovrapposte by remember { mutableStateOf(listOf<Screen>()) }
+    // Se l'app e' stata chiusa mentre un Player era aperto, si riapre direttamente li' invece
+    // che sulla Dashboard; da quel Player, Indietro svuota lo stack e torna alla Dashboard
+    // (sotto non c'e' nessun Dettaglio da ricostruire).
+    var sovrapposte by remember {
+        mutableStateOf(
+            ultimoPlayerRepository.leggi()?.let { (richiesta, posizione) ->
+                listOf<Screen>(Screen.Player(richiesta, posizione))
+            } ?: emptyList()
+        )
+    }
     // Il contenuto per cui e' aperto il menu rapido (pressione lunga su una card).
     var cardMenu by remember { mutableStateOf<ContentCard?>(null) }
     // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
@@ -182,6 +210,12 @@ private fun ContentScreen(
             else -> Unit
         }
     }
+    // L'ultimo Player si dimentica appena l'utente ne esce, cosi' una riapertura successiva
+    // (senza essere passati di nuovo dal background mentre si guardava qualcosa) non ripropone
+    // un contenuto che l'utente aveva gia' lasciato volontariamente.
+    LaunchedEffect(sovrapposte) {
+        if (sovrapposte.lastOrNull() !is Screen.Player) ultimoPlayerRepository.pulisci()
+    }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
     // e la riga Continua a guardare dopo una riproduzione.
@@ -189,26 +223,27 @@ private fun ContentScreen(
     val personalizzazioni = remember(sovrapposte, destinazione, catalogoCorrente, refreshDati) {
         personalizzazioneRepository.elenco()
     }
-    var rigaNuoviEpisodi by remember(catalogoCorrente) {
+    var rigaNuoviEpisodi by remember(catalogoScaricato) {
         mutableStateOf(RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList()))
     }
-    var rigaSuggeriti by remember(catalogoCorrente) {
+    var rigaSuggeriti by remember(catalogoScaricato) {
         mutableStateOf(RigaDashboard(TipoRiga.SUGGERITI, emptyList()))
     }
-    var partiteInEvidenza by remember(catalogoCorrente) { mutableStateOf(emptyList<PartitaConCanale>()) }
-    LaunchedEffect(catalogoCorrente) {
-        rigaNuoviEpisodi = nuoviEpisodi.riga(catalogoCorrente, visti, personalizzazioni)
+    var partiteInEvidenza by remember(catalogoScaricato) { mutableStateOf(emptyList<PartitaConCanale>()) }
+    LaunchedEffect(catalogoScaricato) {
+        val scaricato = catalogoScaricato ?: return@LaunchedEffect
+        rigaNuoviEpisodi = nuoviEpisodi.riga(scaricato, visti, personalizzazioni)
             ?: RigaDashboard(TipoRiga.NUOVI_EPISODI, emptyList())
         rigaSuggeriti = suggerimentiAi.riga(
             chiaveApi = impostazioni.chiaveApiAi,
-            catalogo = catalogoCorrente,
+            catalogo = scaricato,
             visti = visti,
             personalizzazioni = personalizzazioni
         ) ?: RigaDashboard(TipoRiga.SUGGERITI, emptyList())
         partiteInEvidenza = sportInEvidenza.partite(
             attivo = impostazioni.sportInDashboard,
             chiaveApi = impostazioni.chiaveApiSport,
-            canali = catalogoCorrente.canali,
+            canali = scaricato.canali,
             limite = 20
         )
     }
@@ -253,16 +288,21 @@ private fun ContentScreen(
         PlayerScreen(
             richiesta = sopra.richiesta,
             posizioneIniziale = sopra.posizioneIniziale,
+            haProssimoEpisodio = sopra.coda.isNotEmpty(),
             onProgresso = { posizioneMs, durataMs ->
                 vistoRepository.registraProgresso(sopra.richiesta, posizioneMs, durataMs)
             },
-            onRiproduzioneTerminata = {
-                // A fine Episodio parte da solo il successivo (anche di una Stagione dopo),
-                // scalando la coda. Senza coda (Film, Canale, ultimo Episodio) non succede nulla.
+            onProssimoEpisodio = {
+                // Scatta a fine Episodio (parte da solo il successivo, anche di una Stagione
+                // dopo) o dal pulsante "Prossimo episodio" nei controlli. Senza coda (Film,
+                // Canale, ultimo Episodio) non succede nulla.
                 sopra.coda.firstOrNull()?.let { prossima ->
                     sovrapposte = sovrapposte.dropLast(1) +
                         Screen.Player(prossima, 0L, sopra.coda.drop(1))
                 }
+            },
+            onVaInBackground = { posizioneMs ->
+                ultimoPlayerRepository.salva(sopra.richiesta, posizioneMs)
             }
         )
         return
@@ -308,7 +348,11 @@ private fun ContentScreen(
                             onRiproduci = { richiesta, posizione, coda ->
                                 sovrapposte = sovrapposte + Screen.Player(richiesta, posizione, coda)
                             },
-                            onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) }
+                            onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) },
+                            onResetVisti = { chiavi ->
+                                vistoRepository.rimuoviVisti(chiavi)
+                                refreshDati++
+                            }
                         )
                     }
 

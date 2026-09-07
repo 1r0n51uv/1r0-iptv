@@ -63,6 +63,7 @@ import com.ir0.iptv.app.theme.LocalAccento
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ir0.iptv.app.content.ContentFetcher
+import com.ir0.iptv.app.content.DettaglioCache
 import com.ir0.iptv.app.util.DownsampleBlurTransformation
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.domain.catalog.ContentCard
@@ -101,26 +102,31 @@ fun DetailScreen(
     preferito: Boolean,
     onCambiaPreferito: () -> Unit,
     onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
-    onRiproduciCon: (RichiestaRiproduzione) -> Unit
+    onRiproduciCon: (RichiestaRiproduzione) -> Unit,
+    /** Azzera i Visti la cui Chiave di Identita' e' tra quelle date: un singolo Episodio o
+     * tutti gli Episodi di una Stagione (vedi VistoRepository.rimuoviVisti). */
+    onResetVisti: (Set<String>) -> Unit = {}
 ) {
     when (card) {
         is ContentCard.Film -> DettaglioFilm(card, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon)
 
         is ContentCard.SerieCard.Pronta ->
-            DettaglioSerie(card, card.serie, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon)
+            DettaglioSerie(card, card.serie, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti)
 
         is ContentCard.SerieCard.DaCaricare -> {
-            var serie by remember(card) { mutableStateOf<Serie?>(null) }
+            var serie by remember(card) { mutableStateOf(DettaglioCache.serie(card.chiaveIdentita)) }
             var fallita by remember(card) { mutableStateOf(false) }
             LaunchedEffect(card) {
+                if (serie != null) return@LaunchedEffect
                 val risultato = ContentFetcher().dettaglioSerie(card)
+                if (risultato != null) DettaglioCache.salvaSerie(card.chiaveIdentita, risultato)
                 serie = risultato
                 fallita = risultato == null
             }
             val serieCorrente = serie
             when {
                 serieCorrente != null -> DettaglioSerie(
-                    card, serieCorrente, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon
+                    card, serieCorrente, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti
                 )
 
                 fallita -> DettaglioErrore(card.title)
@@ -151,9 +157,18 @@ private fun DettaglioFilm(
     val percentuale = registro.percentuale(visti, card.chiaveIdentita)
     val focusPrincipale = remember(card) { FocusRequester() }
 
-    var dettagli by remember(card) { mutableStateOf<DettaglioEsteso?>(null) }
+    var dettagli by remember(card) { mutableStateOf(DettaglioCache.film(card.chiaveIdentita)) }
+    // Le Sorgenti M3U non hanno un DettaglioEsteso da recuperare: niente scheletro per loro.
+    var caricandoDettagli by remember(card) { mutableStateOf(dettagli == null && card.xtream != null) }
     LaunchedEffect(card) {
-        dettagli = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+        if (dettagli != null) {
+            caricandoDettagli = false
+            return@LaunchedEffect
+        }
+        val risultato = card.xtream?.let { ContentFetcher().dettaglioFilm(it) }
+        if (risultato != null) DettaglioCache.salvaFilm(card.chiaveIdentita, risultato)
+        dettagli = risultato
+        caricandoDettagli = false
     }
 
     Pagina(sfondo = card.imageUrl, focusIniziale = focusPrincipale, chiaveRifocus = card.chiaveIdentita) { statoScorrimento ->
@@ -166,7 +181,8 @@ private fun DettaglioFilm(
             titolo = card.title,
             meta = card.categoria,
             plot = card.plot ?: dettagli?.trama,
-            dettagli = dettagli
+            dettagli = dettagli,
+            caricandoDettagli = caricandoDettagli
         ) {
             PulsanteAzione(
                 // Un Film mai visto e' "Play"; ripreso mostra solo "Riprendi", senza il minutaggio.
@@ -194,7 +210,8 @@ private fun DettaglioSerie(
     preferito: Boolean,
     onCambiaPreferito: () -> Unit,
     onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
-    onRiproduciCon: (RichiestaRiproduzione) -> Unit
+    onRiproduciCon: (RichiestaRiproduzione) -> Unit,
+    onResetVisti: (Set<String>) -> Unit
 ) {
     val prossima = remember(serie, visti) { resolver.risolvi(serie, visti) }
     var stagioneSelezionata by remember(serie) {
@@ -301,7 +318,11 @@ private fun DettaglioSerie(
             SelettoreStagioni(
                 stagioni = serie.seasons,
                 selezionata = stagioneSelezionata,
-                onSeleziona = { stagioneSelezionata = it }
+                visti = visti,
+                onSeleziona = { stagioneSelezionata = it },
+                onSegnaStagioneNonVista = { stagione ->
+                    onResetVisti(stagione.episodes.map { it.url }.toSet())
+                }
             )
         }
 
@@ -325,7 +346,8 @@ private fun DettaglioSerie(
                         codaDopo(episodio)
                     )
                 },
-                onEpisodioRiproduciCon = { episodio -> onRiproduciCon(richiestaDi(episodio)) }
+                onEpisodioRiproduciCon = { episodio -> onRiproduciCon(richiestaDi(episodio)) },
+                onEpisodioSegnaNonVisto = { episodio -> onResetVisti(setOf(episodio.url)) }
             )
         }
     }
@@ -402,6 +424,9 @@ private fun Testata(
     meta: String?,
     plot: String?,
     dettagli: DettaglioEsteso? = null,
+    /** In attesa del DettaglioEsteso (solo Film da Sorgenti Xtream): mostra uno scheletro al
+     * posto del pannello cast/regista/genere, invece di uno spazio vuoto che poi "salta" fuori. */
+    caricandoDettagli: Boolean = false,
     azioni: @Composable () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
@@ -447,8 +472,32 @@ private fun Testata(
             }
             if (dettagli != null && !dettagli.isEmpty) {
                 DettagliEstesi(dettagli)
+            } else if (caricandoDettagli) {
+                ScheletroDettagliEstesi()
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { azioni() }
+        }
+    }
+}
+
+@Composable
+private fun ScheletroDettagliEstesi() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .width(180.dp)
+                .height(13.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF262B33))
+        )
+        repeat(2) {
+            Box(
+                modifier = Modifier
+                    .width(280.dp)
+                    .height(13.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF262B33))
+            )
         }
     }
 }
@@ -557,11 +606,17 @@ private val ALTEZZA_MAX_DROPDOWN_STAGIONI = 48.dp * 6 + 16.dp
 private fun SelettoreStagioni(
     stagioni: List<Stagione>,
     selezionata: Stagione?,
-    onSeleziona: (Stagione) -> Unit
+    visti: List<Visto>,
+    onSeleziona: (Stagione) -> Unit,
+    onSegnaStagioneNonVista: (Stagione) -> Unit
 ) {
     var espanso by remember { mutableStateOf(false) }
     var infocato by remember { mutableStateOf(false) }
+    var menuAperto by remember { mutableStateOf(false) }
     val accento = LocalAccento.current
+    val stagioneCorrente = selezionata ?: stagioni.firstOrNull()
+    val haVistoStagione = stagioneCorrente != null &&
+        stagioneCorrente.episodes.any { ep -> visti.any { it.chiaveIdentita == ep.url } }
 
     Box {
         Row(
@@ -569,7 +624,10 @@ private fun SelettoreStagioni(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier
                 .onFocusChanged { infocato = it.isFocused }
-                .clickable { espanso = true }
+                .pressabile(
+                    onClick = { espanso = true },
+                    onLongClick = { menuAperto = true }.takeIf { haVistoStagione }
+                )
                 .background(Color(0xFF1F232A), RoundedCornerShape(8.dp))
                 .border(2.dp, if (infocato || espanso) accento else Color.Transparent, RoundedCornerShape(8.dp))
                 .padding(horizontal = 16.dp, vertical = 9.dp)
@@ -605,6 +663,17 @@ private fun SelettoreStagioni(
             }
         }
     }
+    if (menuAperto && stagioneCorrente != null) {
+        MenuStagione(
+            stagione = stagioneCorrente,
+            titolo = nomeStagione(stagioneCorrente),
+            onSegnaNonVista = {
+                menuAperto = false
+                onSegnaStagioneNonVista(stagioneCorrente)
+            },
+            onChiudi = { menuAperto = false }
+        )
+    }
 }
 
 @Composable
@@ -613,7 +682,8 @@ private fun CarouselEpisodi(
     posterSerie: String?,
     visti: List<Visto>,
     onEpisodioClick: (Episodio) -> Unit,
-    onEpisodioRiproduciCon: (Episodio) -> Unit
+    onEpisodioRiproduciCon: (Episodio) -> Unit,
+    onEpisodioSegnaNonVisto: (Episodio) -> Unit
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -621,12 +691,15 @@ private fun CarouselEpisodi(
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         items(episodi) { episodio ->
+            val immagine = episodio.immagine ?: posterSerie
             CardEpisodio(
                 episodio = episodio,
-                immagine = episodio.immagine ?: posterSerie,
+                immagine = immagine,
                 percentuale = registro.percentuale(visti, episodio.url),
+                haVisto = visti.any { it.chiaveIdentita == episodio.url },
                 onClick = { onEpisodioClick(episodio) },
-                onLongClick = { onEpisodioRiproduciCon(episodio) }
+                onRiproduciCon = { onEpisodioRiproduciCon(episodio) },
+                onSegnaNonVisto = { onEpisodioSegnaNonVisto(episodio) }
             )
         }
     }
@@ -637,16 +710,19 @@ private fun CardEpisodio(
     episodio: Episodio,
     immagine: String?,
     percentuale: Int,
+    haVisto: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onRiproduciCon: () -> Unit,
+    onSegnaNonVisto: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
+    var menuAperto by remember { mutableStateOf(false) }
     val forma = RoundedCornerShape(8.dp)
     Column(
         modifier = Modifier
             .width(240.dp)
             .onFocusChanged { infocato = it.isFocused }
-            .pressabile(onClick = onClick, onLongClick = onLongClick),
+            .pressabile(onClick = onClick, onLongClick = { menuAperto = true }),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
@@ -686,6 +762,22 @@ private fun CardEpisodio(
             fontSize = 14.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+    if (menuAperto) {
+        MenuEpisodio(
+            episodio = episodio,
+            copertina = immagine,
+            haVisto = haVisto,
+            onRiproduciCon = {
+                menuAperto = false
+                onRiproduciCon()
+            },
+            onSegnaNonVisto = {
+                menuAperto = false
+                onSegnaNonVisto()
+            },
+            onChiudi = { menuAperto = false }
         )
     }
 }
