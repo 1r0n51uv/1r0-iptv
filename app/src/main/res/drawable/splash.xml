@@ -1,0 +1,16 @@
+<!-- Sfondo della finestra prima che Compose disegni il primo frame: all'avvio a freddo
+     passano ~250ms in cui altrimenti si vedrebbe solo il vuoto scuro. Un glifo Play centrato
+     su fondo inchiostro fa capire subito che l'app sta partendo; poi LoadingScreen prende il
+     posto con lo scheletro animato. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="108dp"
+    android:viewportWidth="192"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#14161A"
+        android:pathData="M0,0h192v108h-192z" />
+    <path
+        android:fillColor="#FFB454"
+        android:pathData="M85,45 L85,63 L102,54 Z" />
+</vector>

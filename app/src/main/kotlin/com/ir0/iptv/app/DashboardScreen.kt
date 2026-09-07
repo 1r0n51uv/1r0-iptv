@@ -15,10 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,8 +32,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,54 +113,59 @@ fun DashboardScreen(
         }
     }
 
-    val statoColonna = rememberLazyListState()
+    // Colonna a scorrimento "normale", non LazyColumn: le sezioni sono poche (max 5) e con la
+    // LazyColumn, scendendo tra le righe, l'hero in cima veniva smontato — poi da riga 1 non si
+    // riusciva piu' a risalire su di lui col D-pad (niente bersaglio di focus sopra), e la banda
+    // "Continua a guardare" tornava visibile solo riaprendo la Home. Qui resta tutto montato.
+    val statoColonna = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
-    val offsetHero = if (hero != null) 1 else 0
-    val indiceSezioneDaFocalizzare = ordine.indexOfFirst { sezione ->
-        val tipo = tipoRigaDi(sezione) ?: return@indexOfFirst false
-        contenutiRigaVisibili(tipo).any { it.chiaveIdentita == chiaveDaFocalizzare }
-    }
 
     LaunchedEffect(chiaveDaFocalizzare, righe, ordine, hero) {
         when {
             hero != null && hero.chiaveIdentita == chiaveDaFocalizzare -> {
-                statoColonna.scrollToItem(0)
+                statoColonna.scrollTo(0)
                 runCatching { focusRequester.requestFocus() }
                 // Dare il focus al pulsante Riprendi innesca un bring-into-view che puo'
                 // spingere fuori dallo schermo il bordo alto dell'hero, che invece ci sta
-                // tutto: dopo un frame si rimette la lista in cima.
+                // tutto: dopo un frame si rimette la colonna in cima.
                 withFrameNanos { }
-                statoColonna.scrollToItem(0)
+                statoColonna.scrollTo(0)
             }
-            indiceSezioneDaFocalizzare >= 0 -> {
-                statoColonna.scrollToItem(indiceSezioneDaFocalizzare + offsetHero)
-                // La card puo' non essere ancora attaccata: in quel caso resta il focus di default.
+            else -> {
+                // Le righe sono tutte montate: dare il focus alla card giusta basta, il
+                // bring-into-view della colonna la porta in vista da solo.
                 runCatching { focusRequester.requestFocus() }
             }
         }
     }
 
-    LazyColumn(
-        state = statoColonna,
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A)),
-        contentPadding = PaddingValues(vertical = 32.dp),
+            .background(Color(0xFF14161A))
+            .verticalScroll(statoColonna)
+            .padding(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
         if (hero != null) {
-            item {
-                HeroContinua(
-                    card = hero,
-                    percentuale = registroVisti.percentuale(visti, hero.chiaveIdentita),
-                    preferito = elencoPreferiti.preferito(personalizzazioni, hero),
-                    daRiprendere = heroDaRiprendere,
-                    focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
-                    onClick = { onContenutoClick(hero) }
-                )
-            }
+            HeroContinua(
+                card = hero,
+                percentuale = registroVisti.percentuale(visti, hero.chiaveIdentita),
+                preferito = elencoPreferiti.preferito(personalizzazioni, hero),
+                daRiprendere = heroDaRiprendere,
+                focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
+                // Risalendo col D-pad, quando il pulsante prende il focus si riporta la colonna
+                // in cima cosi' la banda "Continua a guardare" si vede tutta. Va rifatto per
+                // qualche frame: il bring-into-view del focus vorrebbe mostrare solo il pulsante
+                // (in basso nell'hero) e altrimenti avrebbe l'ultima parola.
+                onFocalizzato = {
+                    scope.launch { repeat(4) { withFrameNanos {}; statoColonna.scrollTo(0) } }
+                },
+                onClick = { onContenutoClick(hero) }
+            )
         }
-        items(ordine) { sezione ->
+        ordine.forEach { sezione ->
             if (sezione == SezioneHome.SPORT) {
                 FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
             } else {
@@ -201,6 +209,7 @@ private fun HeroContinua(
     preferito: Boolean,
     daRiprendere: Boolean,
     focusRequester: FocusRequester?,
+    onFocalizzato: () -> Unit = {},
     onClick: () -> Unit
 ) {
     var pulsanteInfocato by remember { mutableStateOf(false) }
@@ -314,7 +323,10 @@ private fun HeroContinua(
                 modifier = Modifier
                     .padding(top = 6.dp)
                     .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-                    .onFocusChanged { pulsanteInfocato = it.isFocused }
+                    .onFocusChanged {
+                        pulsanteInfocato = it.isFocused
+                        if (it.isFocused) onFocalizzato()
+                    }
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onClick)
                     .background(accento)
@@ -392,8 +404,9 @@ fun RigaContenuti(
         LazyRow(
             state = statoRiga,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            // Il padding verticale lascia respirare la card in focus, ingrandita, senza tagliarla.
-            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
+            // Il padding verticale lascia respirare la card in focus, ingrandita, senza tagliarla:
+            // con lo zoom ancorato in basso la crescita e' tutta verso l'alto.
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 20.dp)
         ) {
             items(contenuti) { card ->
                 CardContenuto(

@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,13 +85,24 @@ fun CardContenuto(
     ) {
         val forma = RoundedCornerShape(8.dp)
         Box(
+            // Contenitore a dimensione fissa: e' questo il bersaglio del focus e del
+            // "bring into view" del contenitore a scorrimento. Lo zoom NON va messo qui: la
+            // scala di `graphicsLayer` verrebbe letta dal contenitore verticale, che ad ogni
+            // cambio di focus tra le card scrollerebbe di qualche px per "rimettere in vista"
+            // la card ingrandita — ed e' proprio l'ondeggiamento su e giu' della riga.
             modifier = Modifier
                 .width(larghezza)
                 .height(altezza)
-                .zoomInFocus(infocata, forma)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { infocata = it.isFocused }
                 .pressabile(onClick = onClick, onLongClick = onLongClick)
+        ) {
+          Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // Ancorata in basso: la card in focus cresce solo verso l'alto, la linea di base
+                // della riga (bordo inferiore + titolo sotto) non si sposta scorrendo tra le card.
+                .zoomInFocus(infocata, forma, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
                 .background(Color(0xFF262B33))
                 .border(
@@ -146,6 +158,7 @@ fun CardContenuto(
                     )
                 }
             }
+          }
         }
         Text(
             text = card.title,

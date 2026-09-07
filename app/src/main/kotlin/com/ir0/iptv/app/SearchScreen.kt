@@ -181,7 +181,7 @@ fun GrigliaContenuti(
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
         // Margini extra perche' la card in focus, ingrandita, non venga tagliata ai bordi.
-        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 12.dp, bottom = 28.dp)
+        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 20.dp, bottom = 28.dp)
     ) {
         items(contenuti) { card ->
             CardContenuto(

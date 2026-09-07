@@ -102,6 +102,13 @@ class MainActivity : ComponentActivity() {
         val suggerimentiAi = SuggerimentiAi()
         val sportInEvidenza = SportInEvidenza()
         setContent {
+            // Back resta SEMPRE dentro l'app: si esce solo con HOME. Questo handler di base copre
+            // le fasi senza uno schermo di navigazione (primo avvio, caricamento del catalogo),
+            // dove altrimenti Back terminava l'Activity e la TV mostrava il suo "Uscire dall'app?".
+            // Sugli schermi di contenuto l'handler interno di ContentScreen, composto dopo, ha la
+            // precedenza e gestisce Dettaglio/player/ritorno alla Dashboard.
+            BackHandler { /* no-op */ }
+
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
             LaunchedEffect(Unit) {
                 while (sorgenti.isEmpty()) {

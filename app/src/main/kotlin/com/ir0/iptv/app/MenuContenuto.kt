@@ -86,11 +86,15 @@ fun MenuContenuto(
         LaunchedEffect(card) { runCatching { primoFocus.requestFocus() } }
 
         // Il menu si apre mentre OK e' ancora premuto: la coda della pressione lunga (KeyDown
-        // ripetuti + primo rilascio) va ignorata, altrimenti farebbe scattare da sola la prima
-        // voce. Il menu "si arma" al primo rilascio di OK, o comunque dopo un breve timeout.
+        // ripetuti + rilascio finale) va ignorata, altrimenti quel rilascio farebbe scattare da
+        // sola la prima voce del menu (per una Serie e' "Apri dettaglio", che aprirebbe la pagina
+        // di Dettaglio dietro al menu). Il menu "si arma" al primo rilascio di OK o alla prima
+        // freccia (l'utente sta gia' navigando, OK e' rilasciato).
         var armato by remember { mutableStateOf(false) }
+        // Rete di sicurezza, volutamente lunga: con un timeout corto scattava mentre OK era
+        // ancora premuto per una pressione lunga insistita, riaprendo lo stesso problema.
         LaunchedEffect(Unit) {
-            delay(1200)
+            delay(3000)
             armato = true
         }
 
@@ -103,9 +107,23 @@ fun MenuContenuto(
                     val tastoCentrale = evento.key == Key.DirectionCenter ||
                         evento.key == Key.Enter ||
                         evento.key == Key.NumPadEnter
-                    if (!tastoCentrale) return@onPreviewKeyEvent false
-                    if (evento.type == KeyEventType.KeyUp) armato = true
-                    true
+                    when {
+                        // Rilascio di OK con cui si e' aperto il menu (ed eventuali KeyDown
+                        // ripetuti mentre era premuto): si consumano; al primo KeyUp il menu
+                        // diventa operativo.
+                        tastoCentrale && evento.type == KeyEventType.KeyUp -> {
+                            armato = true
+                            true
+                        }
+                        tastoCentrale -> true
+                        // Una direzione: OK e' gia' stato rilasciato, l'utente naviga. Si arma e
+                        // si lascia passare l'evento cosi' il focus si sposta subito.
+                        evento.type == KeyEventType.KeyDown -> {
+                            armato = true
+                            false
+                        }
+                        else -> false
+                    }
                 }
                 .width(380.dp)
                 .clip(forma)

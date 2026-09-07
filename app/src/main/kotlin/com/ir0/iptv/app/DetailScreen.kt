@@ -51,6 +51,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -652,7 +653,7 @@ private fun CardEpisodio(
             modifier = Modifier
                 .width(240.dp)
                 .height(135.dp)
-                .zoomInFocus(infocato, forma)
+                .zoomInFocus(infocato, forma, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
                 .background(Color(0xFF262B33))
                 .border(

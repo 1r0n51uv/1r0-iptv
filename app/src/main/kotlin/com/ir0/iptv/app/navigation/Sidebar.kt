@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
@@ -107,7 +108,15 @@ private fun SidebarButton(
     Column(
         modifier = Modifier
             .size(ICONA_DIMENSIONE)
-            .zoomInFocus(isFocused, forma, scalaMax = 1.18f, ombraMax = 6.dp)
+            .zoomInFocus(
+                isFocused,
+                forma,
+                scalaMax = 1.12f,
+                ombraMax = 6.dp,
+                // Icona piccola e vicina alle altre: ritorno a riposo rapido, cosi' non resta
+                // "accesa" quando il focus e' gia' passato oltre.
+                rigidezza = Spring.StiffnessMedium
+            )
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .clip(forma)
             .background(if (active) accento else Color.Transparent)
@@ -140,7 +149,15 @@ private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .size(ICONA_DIMENSIONE)
-            .zoomInFocus(isFocused, forma, scalaMax = 1.18f, ombraMax = 6.dp)
+            .zoomInFocus(
+                isFocused,
+                forma,
+                scalaMax = 1.12f,
+                ombraMax = 6.dp,
+                // Icona piccola e vicina alle altre: ritorno a riposo rapido, cosi' non resta
+                // "accesa" quando il focus e' gia' passato oltre.
+                rigidezza = Spring.StiffnessMedium
+            )
             .clip(forma)
             .then(
                 if (isFocused) {

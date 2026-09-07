@@ -3,8 +3,7 @@ package com.ir0.iptv.app
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.getValue
@@ -28,19 +27,30 @@ import kotlinx.coroutines.launch
 private const val SOGLIA_PRESSIONE_LUNGA_MS = 400L
 
 /**
+ * Stato della gesture sul tasto OK, in campi normali (non snapshot): il timer della pressione
+ * lunga gira in una coroutine e il suo esito deve essere visibile *subito* al gestore del KeyUp,
+ * che parte pochi ms dopo. Con `mutableStateOf` la scrittura del timer non era ancora visibile al
+ * KeyUp e partivano *entrambe* le azioni: il menu si apriva e dietro si apriva anche il Dettaglio.
+ *
+ * [attiva] copre l'intera gesture, dal primo KeyDown al KeyUp: tra i due arrivano i KeyDown
+ * ripetuti dell'auto-repeat (`FLAG_LONG_PRESS`), che vanno ignorati e NON devono ri-armare la
+ * gesture — era l'altra meta' del bug.
+ */
+private class StatoPressione {
+    var attiva = false
+    var lungaScattata = false
+    var clickScattato = false
+}
+
+/**
  * "Premi OK per aprire, tieni premuto OK per il menu" col telecomando.
  *
- * `combinedClickable` gestisce da solo il tocco (tap e pressione lunga) ma NON la pressione lunga
- * del tasto centrale del D-pad. Qui si intercettano gli eventi del tasto centrale prima di
- * `combinedClickable` (onPreviewKeyEvent):
- *  - un timer fa scattare [onLongClick] mentre OK e' ancora premuto (il menu appare subito);
- *  - al rilascio, se il long non e' scattato, parte [onClick].
- *
- * Mentre OK e' premuto la card si rimpicciolisce un po' (zoom out) per far vedere cosa si sta
- * premendo. Il "trascinamento" del KeyUp verso il menu appena aperto lo neutralizza il menu
- * stesso (vedi MenuContenuto), che ignora la coda della pressione lunga.
+ * Il tasto centrale del D-pad e' gestito **tutto** in un `onPreviewKeyEvent` messo per primo
+ * nella catena (intercetta prima di `clickable`, che quindi riceve solo il tap del tocco): un
+ * timer fa scattare [onLongClick] mentre OK e' ancora premuto (il menu appare subito); al
+ * rilascio, se il long non e' gia' scattato, parte [onClick]. Le due azioni si escludono a
+ * vicenda tramite [StatoPressione].
  */
-@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.pressabile(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
@@ -50,7 +60,7 @@ fun Modifier.pressabile(
     val premutoTouch by interactionSource.collectIsPressedAsState()
     var premutoTasto by remember { mutableStateOf(false) }
     var timerPressioneLunga by remember { mutableStateOf<Job?>(null) }
-    var lungaScattata by remember { mutableStateOf(false) }
+    val stato = remember { StatoPressione() }
 
     val premuta = premutoTouch || premutoTasto
     val scalaPressione by animateFloatAsState(
@@ -60,6 +70,7 @@ fun Modifier.pressabile(
     )
 
     fun fine() {
+        stato.attiva = false
         premutoTasto = false
         timerPressioneLunga?.cancel()
         timerPressioneLunga = null
@@ -70,15 +81,6 @@ fun Modifier.pressabile(
             scaleX = scalaPressione
             scaleY = scalaPressione
         }
-        // Rete di sicurezza: se il focus se ne va mentre OK e' premuto (menu che si apre), la
-        // card non deve restare rimpicciolita.
-        .onFocusChanged { if (!it.isFocused) fine() }
-        .combinedClickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
         .onPreviewKeyEvent { evento ->
             val tastoCentrale = evento.key == Key.DirectionCenter ||
                 evento.key == Key.Enter ||
@@ -86,17 +88,20 @@ fun Modifier.pressabile(
             if (!tastoCentrale) return@onPreviewKeyEvent false
             when (evento.type) {
                 KeyEventType.KeyDown -> {
-                    if (!premutoTasto) {
+                    // Solo il primo KeyDown apre la gesture; i KeyDown ripetuti dell'auto-repeat
+                    // vengono ingoiati senza ri-armare nulla.
+                    if (!stato.attiva) {
+                        stato.attiva = true
+                        stato.lungaScattata = false
+                        stato.clickScattato = false
                         premutoTasto = true
-                        lungaScattata = false
                         if (onLongClick != null) {
                             timerPressioneLunga = scope.launch {
                                 delay(SOGLIA_PRESSIONE_LUNGA_MS)
-                                lungaScattata = true
-                                // Il menu si apre e ruba il focus: qui la card ha finito la sua
-                                // pressione, torna a dimensione normale.
-                                premutoTasto = false
-                                onLongClick()
+                                if (stato.attiva && !stato.clickScattato) {
+                                    stato.lungaScattata = true
+                                    onLongClick()
+                                }
                             }
                         }
                     }
@@ -104,14 +109,24 @@ fun Modifier.pressabile(
                 }
 
                 KeyEventType.KeyUp -> {
-                    val eraLunga = lungaScattata
+                    val giaLunga = stato.lungaScattata
                     fine()
-                    lungaScattata = false
-                    if (!eraLunga) onClick()
+                    if (!giaLunga && !stato.clickScattato) {
+                        stato.clickScattato = true
+                        onClick()
+                    }
                     true
                 }
 
                 else -> false
             }
         }
+        // Rete di sicurezza: se il focus se ne va mentre OK e' premuto (menu che si apre), la
+        // gesture si chiude e la card non resta rimpicciolita.
+        .onFocusChanged { if (!it.isFocused) fine() }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick
+        )
 }
