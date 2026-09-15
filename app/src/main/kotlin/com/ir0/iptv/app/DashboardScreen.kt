@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,7 +80,13 @@ fun DashboardScreen(
     ordine: List<SezioneHome> = SezioneHome.ordinePredefinito,
     sport: List<PartitaConCanale> = emptyList(),
     onContenutoClick: (ContentCard) -> Unit,
-    onContenutoLongClick: (ContentCard) -> Unit = {}
+    onContenutoLongClick: (ContentCard) -> Unit = {},
+    /** Solo per il pulsante "Riprendi" dell'hero: riproduce subito invece di aprire il Dettaglio
+     * (a differenza di [onContenutoClick], usato per ogni altra card). */
+    onRiprendiClick: (ContentCard) -> Unit = onContenutoClick,
+    /** Vero mentre il pulsante "Riprendi" attende il caricamento della Serie (per un Episodio, se
+     * non gia' in cache di sessione) prima di poter partire. */
+    caricandoRipresa: Boolean = false
 ) {
     if (catalogoVuoto) {
         SchermataVuota(
@@ -154,6 +161,7 @@ fun DashboardScreen(
                 percentuale = registroVisti.percentuale(visti, hero.chiaveIdentita),
                 preferito = elencoPreferiti.preferito(personalizzazioni, hero),
                 daRiprendere = heroDaRiprendere,
+                caricando = heroDaRiprendere && caricandoRipresa,
                 focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
                 // Risalendo col D-pad, quando il pulsante prende il focus si riporta la colonna
                 // in cima cosi' la banda "Continua a guardare" si vede tutta. Va rifatto per
@@ -162,7 +170,10 @@ fun DashboardScreen(
                 onFocalizzato = {
                     scope.launch { repeat(4) { withFrameNanos {}; statoColonna.scrollTo(0) } }
                 },
-                onClick = { onContenutoClick(hero) }
+                // "Riprendi" (Continua a guardare) parte subito; per qualunque altro hero (Serie
+                // mai iniziata, Film, Canale dal Contenuto di default) il click apre il Dettaglio
+                // come per qualsiasi altra card.
+                onClick = { if (heroDaRiprendere) onRiprendiClick(hero) else onContenutoClick(hero) }
             )
         }
         ordine.forEach { sezione ->
@@ -209,6 +220,9 @@ private fun HeroContinua(
     preferito: Boolean,
     daRiprendere: Boolean,
     focusRequester: FocusRequester?,
+    /** Vero mentre "Riprendi" attende il caricamento della Serie prima di poter partire: il
+     * pulsante mostra uno spinner al posto dell'icona Play e non risponde al click. */
+    caricando: Boolean = false,
     onFocalizzato: () -> Unit = {},
     onClick: () -> Unit
 ) {
@@ -222,6 +236,7 @@ private fun HeroContinua(
         else -> "FILM"
     }
     val etichettaPulsante = when {
+        caricando -> "Caricamento…"
         daRiprendere -> "Riprendi"
         card is ContentCard.SerieCard -> "Vai alla Serie"
         else -> "Riproduci"
@@ -328,7 +343,7 @@ private fun HeroContinua(
                         if (it.isFocused) onFocalizzato()
                     }
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onClick)
+                    .clickable(enabled = !caricando, onClick = onClick)
                     .background(accento)
                     .border(
                         2.dp,
@@ -339,12 +354,20 @@ private fun HeroContinua(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = Color(0xFF14161A),
-                    modifier = Modifier.size(18.dp)
-                )
+                if (caricando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color(0xFF14161A),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color(0xFF14161A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Text(text = etichettaPulsante, color = Color(0xFF14161A), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }

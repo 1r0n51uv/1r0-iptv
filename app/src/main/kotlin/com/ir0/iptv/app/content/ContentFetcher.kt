@@ -3,6 +3,7 @@ package com.ir0.iptv.app.content
 import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
+import com.ir0.iptv.app.logging.RegistroApp
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.catalog.DettaglioEsteso
@@ -42,14 +43,21 @@ class ContentFetcher(
     private val xtreamEpgMapper: XtreamEpgMapper = XtreamEpgMapper()
 ) {
 
-    suspend fun catalogo(sorgenti: List<Sorgente>): ContentCatalog = withContext(Dispatchers.IO) {
-        val cataloghi = sorgenti.map { sorgente ->
+    suspend fun catalogo(
+        sorgenti: List<Sorgente>,
+        /** Chiamato prima di contattare ogni Sorgente: pilota la schermata di caricamento del
+         * primissimo avvio e l'anello di avanzamento sull'icona "Aggiorna catalogo" in Sidebar. */
+        onProgresso: (indice: Int, totale: Int, sorgente: Sorgente) -> Unit = { _, _, _ -> }
+    ): ContentCatalog = withContext(Dispatchers.IO) {
+        val cataloghi = sorgenti.mapIndexed { indice, sorgente ->
+            onProgresso(indice, sorgenti.size, sorgente)
             try {
                 when (sorgente) {
                     is Sorgente.M3u -> catalogoDaM3u(sorgente)
                     is Sorgente.Xtream -> catalogoDaXtream(sorgente)
                 }
             } catch (e: Exception) {
+                RegistroApp.errore("Sorgente", "Sincronizzazione fallita per '${sorgente.nome}'", e)
                 ContentCatalog()
             }
         }

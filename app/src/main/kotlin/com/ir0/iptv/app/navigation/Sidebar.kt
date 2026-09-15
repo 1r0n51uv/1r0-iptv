@@ -12,6 +12,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,6 +53,9 @@ private val ICONA_DIMENSIONE = 40.dp
 private val GLIFO_DIMENSIONE = 22.dp
 private val SPAZIATURA = 8.dp
 private const val DURATA_ROTAZIONE_MS = 900
+// Icone piccole e vicine: un'ombra da 160ms (il default altrove nell'app) sembra restare
+// "in ritardo" dietro il focus, scorrendo veloce tra le sezioni col D-pad.
+private const val DURATA_OMBRA_SIDEBAR_MS = 80
 
 @Composable
 fun Sidebar(
@@ -60,6 +65,10 @@ fun Sidebar(
      * SINISTRA dai contenuti) ci mette sopra il focus, invece che su quella piu' vicina. */
     focusSezioneCorrente: FocusRequester,
     inAggiornamento: Boolean = false,
+    /** Indice (0-based) e totale delle Sorgenti quando una sincronizzazione e' in corso: pilota
+     * l'anello di avanzamento sull'icona "Aggiorna catalogo". Null quando non ancora noto (es.
+     * prima che il fetch della prima Sorgente sia partito). */
+    progressoSync: Pair<Int, Int>? = null,
     onAggiorna: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -83,7 +92,7 @@ fun Sidebar(
                 onClick = { onSeleziona(destinazione) }
             )
         }
-        RefreshButton(inAggiornamento = inAggiornamento, onClick = onAggiorna)
+        RefreshButton(inAggiornamento = inAggiornamento, progressoSync = progressoSync, onClick = onAggiorna)
     }
 }
 
@@ -122,7 +131,8 @@ private fun SidebarButton(
                 ombraMax = 6.dp,
                 // Icona piccola e vicina alle altre: ritorno a riposo rapido, cosi' non resta
                 // "accesa" quando il focus e' gia' passato oltre.
-                rigidezza = Spring.StiffnessMedium
+                rigidezza = Spring.StiffnessMedium,
+                durataOmbraMs = DURATA_OMBRA_SIDEBAR_MS
             )
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .clip(forma)
@@ -148,7 +158,11 @@ private fun SidebarButton(
 }
 
 @Composable
-private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
+private fun RefreshButton(
+    inAggiornamento: Boolean,
+    progressoSync: Pair<Int, Int>? = null,
+    onClick: () -> Unit
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val accento = LocalAccento.current
@@ -163,7 +177,8 @@ private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
                 ombraMax = 6.dp,
                 // Icona piccola e vicina alle altre: ritorno a riposo rapido, cosi' non resta
                 // "accesa" quando il focus e' gia' passato oltre.
-                rigidezza = Spring.StiffnessMedium
+                rigidezza = Spring.StiffnessMedium,
+                durataOmbraMs = DURATA_OMBRA_SIDEBAR_MS
             )
             .clip(forma)
             .then(
@@ -196,13 +211,33 @@ private fun RefreshButton(inAggiornamento: Boolean, onClick: () -> Unit) {
         } else {
             0f
         }
-        Icon(
-            imageVector = Icons.Filled.Autorenew,
-            contentDescription = if (inAggiornamento) "Aggiornamento in corso" else "Aggiorna catalogo",
-            tint = if (inAggiornamento) Color(0xFF4A505C) else Color(0xFF9AA0AA),
-            modifier = Modifier
-                .size(GLIFO_DIMENSIONE)
-                .graphicsLayer { rotationZ = angolo }
-        )
+        val descrizione = when {
+            inAggiornamento && progressoSync != null ->
+                "Aggiornamento in corso: Sorgente ${progressoSync.first + 1} di ${progressoSync.second}"
+            inAggiornamento -> "Aggiornamento in corso"
+            else -> "Aggiorna catalogo"
+        }
+        Box(contentAlignment = Alignment.Center) {
+            // Rotazione continua dell'icona sempre presente durante l'aggiornamento (segnale di
+            // vita anche prima che si sappia quante Sorgenti ci sono); l'anello sopra si aggiunge
+            // appena l'avanzamento e' noto, per mostrare quanto manca invece della sola attesa.
+            if (inAggiornamento && progressoSync != null) {
+                val (indice, totale) = progressoSync
+                CircularProgressIndicator(
+                    progress = { if (totale > 0) (indice + 1) / totale.toFloat() else 0f },
+                    modifier = Modifier.size(GLIFO_DIMENSIONE + 6.dp),
+                    color = accento,
+                    strokeWidth = 2.dp
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.Autorenew,
+                contentDescription = descrizione,
+                tint = if (inAggiornamento) Color(0xFF4A505C) else Color(0xFF9AA0AA),
+                modifier = Modifier
+                    .size(GLIFO_DIMENSIONE)
+                    .graphicsLayer { rotationZ = angolo }
+            )
+        }
     }
 }

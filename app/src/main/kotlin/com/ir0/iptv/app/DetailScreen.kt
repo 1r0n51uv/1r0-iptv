@@ -687,8 +687,10 @@ private fun CarouselEpisodi(
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        // Spazio verticale perche' la card in focus, ingrandita, non venga tagliata.
-        contentPadding = PaddingValues(vertical = 16.dp)
+        // Spazio sopra/sotto e ai lati perche' la card in focus, ingrandita, non venga tagliata
+        // (lo zoom cresce dal centro orizzontalmente): mancava il padding orizzontale, le card
+        // agli estremi del carousel restavano tagliate.
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
     ) {
         items(episodi) { episodio ->
             val immagine = episodio.immagine ?: posterSerie

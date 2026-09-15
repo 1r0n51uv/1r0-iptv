@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -51,11 +52,11 @@ import com.ir0.iptv.app.customization.PersonalizzazioneRepository
 import com.ir0.iptv.app.dashboard.NuoviEpisodi
 import com.ir0.iptv.app.dashboard.NuoviEpisodiRepository
 import com.ir0.iptv.app.dashboard.SuggerimentiAi
+import com.ir0.iptv.app.logging.RegistroApp
 import com.ir0.iptv.app.navigation.Destinazione
 import com.ir0.iptv.app.navigation.Sidebar
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.playback.RiproduciCon
-import com.ir0.iptv.app.playback.UltimoPlayerRepository
 import com.ir0.iptv.app.playback.VistoRepository
 import com.ir0.iptv.app.settings.Impostazioni
 import com.ir0.iptv.app.settings.ImpostazioniRepository
@@ -70,10 +71,15 @@ import com.ir0.iptv.app.webpanel.WebPanelServer
 import com.ir0.iptv.domain.catalog.ContentCard
 import com.ir0.iptv.domain.catalog.ContentCatalog
 import com.ir0.iptv.domain.catalog.ElencoPreferiti
+import com.ir0.iptv.domain.classification.Episodio
+import com.ir0.iptv.domain.classification.Serie
 import com.ir0.iptv.domain.dashboard.CostruttoreDashboard
 import com.ir0.iptv.domain.dashboard.MemoriaFocus
 import com.ir0.iptv.domain.dashboard.RigaDashboard
 import com.ir0.iptv.domain.dashboard.TipoRiga
+import com.ir0.iptv.domain.playback.NavigazioneSerie
+import com.ir0.iptv.domain.playback.ProssimaVisione
+import com.ir0.iptv.domain.playback.ProssimaVisioneResolver
 import com.ir0.iptv.domain.playback.RegistroVisti
 import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.source.Sorgente
@@ -82,6 +88,7 @@ import java.net.NetworkInterface
 import java.net.SocketException
 import java.util.Collections
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val SORGENTI_POLL_INTERVAL_MS = 2000L
 
@@ -93,14 +100,27 @@ private val costruttoreDashboard = CostruttoreDashboard()
 private val memoriaFocus = MemoriaFocus()
 private val elencoPreferiti = ElencoPreferiti()
 private val registroVisti = RegistroVisti()
+private val prossimaVisioneResolver = ProssimaVisioneResolver()
+private val navigazioneSerie = NavigazioneSerie()
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RegistroApp.inizializza(applicationContext)
+        // Un solo handler per l'intero processo: si registra una volta sola, non ad ogni
+        // ricreazione dell'Activity, altrimenti si accatasterebbero le chiamate precedenti.
+        if (Thread.getDefaultUncaughtExceptionHandler() !is RegistroCrashHandler) {
+            Thread.setDefaultUncaughtExceptionHandler(
+                RegistroCrashHandler(Thread.getDefaultUncaughtExceptionHandler())
+            )
+        }
+        // Nessuna Bundle salvata: e' un vero avvio a freddo (app chiusa/appena installata), non
+        // una ricreazione dell'Activity dopo che il sistema l'ha uccisa in background per
+        // liberare memoria col task ancora vivo (quel caso arriva con una Bundle non nulla).
+        val eraChiusa = savedInstanceState == null
         val sorgenteRepository = SorgenteRepository(applicationContext)
         val catalogoRepository = CatalogoRepository(applicationContext)
         val vistoRepository = VistoRepository(applicationContext)
-        val ultimoPlayerRepository = UltimoPlayerRepository(applicationContext)
         val personalizzazioneRepository = PersonalizzazioneRepository(applicationContext)
         val impostazioniRepository = ImpostazioniRepository(applicationContext)
         val nuoviEpisodi = NuoviEpisodi(NuoviEpisodiRepository(applicationContext))
@@ -129,7 +149,7 @@ class MainActivity : ComponentActivity() {
                     sorgenti = sorgenti,
                     catalogoRepository = catalogoRepository,
                     vistoRepository = vistoRepository,
-                    ultimoPlayerRepository = ultimoPlayerRepository,
+                    eraChiusa = eraChiusa,
                     personalizzazioneRepository = personalizzazioneRepository,
                     impostazioniRepository = impostazioniRepository,
                     nuoviEpisodi = nuoviEpisodi,
@@ -141,13 +161,27 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Registra ogni crash nel registro dell'app (visibile dalle Impostazioni) prima di passare la
+ * mano al comportamento di default di Android, che resta invariato (log su logcat, chiusura del
+ * processo): questo handler osserva soltanto, non sostituisce nulla. */
+private class RegistroCrashHandler(
+    private val precedente: Thread.UncaughtExceptionHandler?
+) : Thread.UncaughtExceptionHandler {
+    override fun uncaughtException(thread: Thread, throwable: Throwable) {
+        RegistroApp.crash(throwable)
+        precedente?.uncaughtException(thread, throwable)
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContentScreen(
     sorgenti: List<Sorgente>,
     catalogoRepository: CatalogoRepository,
     vistoRepository: VistoRepository,
-    ultimoPlayerRepository: UltimoPlayerRepository,
+    /** Vero solo per un avvio a freddo vero e proprio (app chiusa): la sync automatica parte solo
+     * in quel caso, mai per una ricreazione dopo il background (vedi ADR 0009). */
+    eraChiusa: Boolean,
     personalizzazioneRepository: PersonalizzazioneRepository,
     impostazioniRepository: ImpostazioniRepository,
     nuoviEpisodi: NuoviEpisodi,
@@ -155,6 +189,7 @@ private fun ContentScreen(
     sportInEvidenza: SportInEvidenza
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // La copia locale (ADR 0008) si legge subito, cosi' un avvio a freddo mostra qualcosa
     // invece di aspettare la rete; resta null solo se non e' mai stata salvata una volta.
     var catalogo by remember(sorgenti) { mutableStateOf(catalogoRepository.leggi()) }
@@ -164,36 +199,49 @@ private fun ContentScreen(
     var catalogoScaricato by remember(sorgenti) { mutableStateOf<ContentCatalog?>(null) }
     var richiesteDiAggiornamento by remember(sorgenti) { mutableStateOf(0) }
     var inAggiornamento by remember(sorgenti) { mutableStateOf(false) }
+    // Nome della Sorgente in corso e avanzamento (indice/totale): letti dalla schermata di
+    // caricamento del primissimo avvio e dall'icona "Aggiorna catalogo" in Sidebar.
+    var sorgenteInCorso by remember(sorgenti) { mutableStateOf<String?>(null) }
+    var progressoSync by remember(sorgenti) { mutableStateOf<Pair<Int, Int>?>(null) }
     LaunchedEffect(sorgenti, richiesteDiAggiornamento) {
+        // Al primo giro (nessun tocco su "Aggiorna catalogo") la sync automatica parte solo se
+        // l'app era davvero chiusa: tornando dal background si resta sulla sola copia locale
+        // gia' in memoria/su disco (vedi ADR 0009).
+        if (richiesteDiAggiornamento == 0 && !eraChiusa) return@LaunchedEffect
         inAggiornamento = true
         // Il catalogo vecchio resta a schermo durante un aggiornamento: azzerarlo
         // riporterebbe allo scheletro di caricamento ad ogni refresh.
-        val aggiornato = ContentFetcher().catalogo(sorgenti)
+        val aggiornato = ContentFetcher().catalogo(sorgenti) { indice, totale, sorgente ->
+            sorgenteInCorso = sorgente.nome
+            progressoSync = indice to totale
+        }
         catalogo = aggiornato
         catalogoScaricato = aggiornato
         catalogoRepository.salva(aggiornato)
         // Una Serie in cache potrebbe avere nuovi Episodi arrivati proprio con questo refresh.
         DettaglioCache.pulisci()
         inAggiornamento = false
+        sorgenteInCorso = null
+        progressoSync = null
     }
     val catalogoCorrente = catalogo
     if (catalogoCorrente == null) {
-        LoadingScreen()
+        LoadingScreen(
+            messaggio = sorgenteInCorso?.let { nome ->
+                val totale = progressoSync?.second ?: sorgenti.size
+                val indice = progressoSync?.first ?: 0
+                "Caricamento $nome… (${indice + 1} di $totale)"
+            } ?: "Caricamento contenuti…"
+        )
         return
     }
 
     var impostazioni by remember { mutableStateOf(impostazioniRepository.leggi()) }
     var destinazione by remember { mutableStateOf(Destinazione.DASHBOARD) }
-    // Se l'app e' stata chiusa mentre un Player era aperto, si riapre direttamente li' invece
-    // che sulla Dashboard; da quel Player, Indietro svuota lo stack e torna alla Dashboard
-    // (sotto non c'e' nessun Dettaglio da ricostruire).
-    var sovrapposte by remember {
-        mutableStateOf(
-            ultimoPlayerRepository.leggi()?.let { (richiesta, posizione) ->
-                listOf<Screen>(Screen.Player(richiesta, posizione))
-            } ?: emptyList()
-        )
-    }
+    // L'app apre sempre sulla Dashboard, mai dritta sul Player (ADR 0009, ribalta la scelta
+    // della Fase 9): la posizione di ripresa resta comunque salvata tramite il Visto, si rientra
+    // col pulsante "Riprendi".
+    var sovrapposte by remember { mutableStateOf(emptyList<Screen>()) }
     // Il contenuto per cui e' aperto il menu rapido (pressione lunga su una card).
     var cardMenu by remember { mutableStateOf<ContentCard?>(null) }
     // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
@@ -209,12 +257,6 @@ private fun ContentScreen(
             destinazione != Destinazione.DASHBOARD -> destinazione = Destinazione.DASHBOARD
             else -> Unit
         }
-    }
-    // L'ultimo Player si dimentica appena l'utente ne esce, cosi' una riapertura successiva
-    // (senza essere passati di nuovo dal background mentre si guardava qualcosa) non ripropone
-    // un contenuto che l'utente aveva gia' lasciato volontariamente.
-    LaunchedEffect(sovrapposte) {
-        if (sovrapposte.lastOrNull() !is Screen.Player) ultimoPlayerRepository.pulisci()
     }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
@@ -274,6 +316,53 @@ private fun ContentScreen(
         }
     }
 
+    // Il pulsante "Riprendi" nell'hero della Dashboard, mostrato mentre carica la Serie.
+    var caricandoRipresa by remember { mutableStateOf(false) }
+
+    /** Il pulsante "Riprendi" nell'hero della Dashboard riproduce subito, senza passare dal
+     * Dettaglio (a differenza di un click su qualunque altra card, che continua ad aprirlo). Per
+     * un Film basta quel che si sa gia'; per un Episodio serve la Serie completa per calcolare la
+     * coda dei prossimi episodi, quindi si attende il suo caricamento (istantaneo se gia' in
+     * cache di sessione) mostrando uno stato di caricamento sul pulsante stesso. Se il
+     * caricamento fallisce si ripiega sull'apertura del Dettaglio, come per qualunque altro fetch
+     * fallito nell'app. */
+    fun riprendiDaHero(card: ContentCard) {
+        when (card) {
+            is ContentCard.Film -> {
+                val richiesta = richiestaDaCard(card) ?: return
+                val posizione = vistoRepository.posizioneDiRipresa(card.chiaveIdentita) ?: 0L
+                chiaveDaFocalizzare = card.chiaveIdentita
+                sovrapposte = sovrapposte + Screen.Player(richiesta, posizione)
+            }
+
+            is ContentCard.SerieCard -> {
+                caricandoRipresa = true
+                scope.launch {
+                    val serie = DettaglioCache.serie(card.chiaveIdentita) ?: when (card) {
+                        is ContentCard.SerieCard.Pronta ->
+                            card.serie.also { DettaglioCache.salvaSerie(card.chiaveIdentita, it) }
+                        is ContentCard.SerieCard.DaCaricare ->
+                            ContentFetcher().dettaglioSerie(card)
+                                ?.also { DettaglioCache.salvaSerie(card.chiaveIdentita, it) }
+                    }
+                    caricandoRipresa = false
+                    val prossima = serie?.let { prossimaVisioneResolver.risolvi(it, visti) }
+                    if (serie == null || prossima !is ProssimaVisione.Riprendi) {
+                        apri(card)
+                        return@launch
+                    }
+                    val richiesta = richiestaDiEpisodio(prossima.episodio, serie, card.imageUrl)
+                    val coda = navigazioneSerie.episodiSuccessivi(serie, prossima.episodio.url)
+                        .map { richiestaDiEpisodio(it, serie, card.imageUrl) }
+                    chiaveDaFocalizzare = card.chiaveIdentita
+                    sovrapposte = sovrapposte + Screen.Player(richiesta, prossima.posizioneMs, coda)
+                }
+            }
+
+            is ContentCard.Canale -> apri(card)
+        }
+    }
+
     LaunchedEffect(catalogoCorrente) { PonteTv.pubblicaCatalogo(catalogoCorrente) }
     val richiestoDalWeb by PonteTv.daAprire.collectAsState()
     LaunchedEffect(richiestoDalWeb) {
@@ -300,9 +389,6 @@ private fun ContentScreen(
                     sovrapposte = sovrapposte.dropLast(1) +
                         Screen.Player(prossima, 0L, sopra.coda.drop(1))
                 }
-            },
-            onVaInBackground = { posizioneMs ->
-                ultimoPlayerRepository.salva(sopra.richiesta, posizioneMs)
             }
         )
         return
@@ -319,6 +405,7 @@ private fun ContentScreen(
                 },
                 focusSezioneCorrente = focusSidebarSezione,
                 inAggiornamento = inAggiornamento,
+                progressoSync = progressoSync,
                 onAggiorna = { richiesteDiAggiornamento++ }
             )
             Box(
@@ -367,7 +454,9 @@ private fun ContentScreen(
                             ordine = remember(impostazioni.ordineHome) { SezioneHome.daSalvato(impostazioni.ordineHome) },
                             sport = partiteInEvidenza.take(2),
                                 onContenutoClick = { apri(it) },
-                            onContenutoLongClick = { cardMenu = it }
+                            onContenutoLongClick = { cardMenu = it },
+                            onRiprendiClick = { riprendiDaHero(it) },
+                            caricandoRipresa = caricandoRipresa
                         )
 
                         Destinazione.CANALI -> CanaliScreen(
@@ -503,6 +592,21 @@ private fun richiestaDaCard(card: ContentCard): RichiestaRiproduzione? = when (c
 
 private fun ContentCard.Canale.toRichiesta() =
     RichiestaRiproduzione(titolo = title, streamUrl = streamUrl, posterUrl = imageUrl)
+
+/** La richiesta per un Episodio di una Serie gia' caricata, usata dal pulsante "Riprendi"
+ * dell'hero in Dashboard (vedi [ContentScreen]/riprendiDaHero) — stessa costruzione della card
+ * usata in `DetailScreen.richiestaDi`. */
+private fun richiestaDiEpisodio(episodio: Episodio, serie: Serie, immagineCard: String?): RichiestaRiproduzione =
+    RichiestaRiproduzione(
+        titolo = episodio.title,
+        streamUrl = episodio.url,
+        tipo = TipoVisto.EPISODIO,
+        serie = serie.name,
+        posterUrl = episodio.immagine
+            ?: navigazioneSerie.stagioneDi(serie, episodio)?.immagine
+            ?: serie.poster
+            ?: immagineCard
+    )
 
 private fun localWebPanelAddress(): String? {
     val interfaces = try {

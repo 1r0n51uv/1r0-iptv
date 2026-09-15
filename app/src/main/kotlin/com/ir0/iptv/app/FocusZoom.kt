@@ -43,7 +43,11 @@ fun Modifier.zoomInFocus(
     /** Punto fisso dello zoom. Per una card in una riga orizzontale conviene ancorarla in basso
      * (0.5, 1): cresce solo verso l'alto, il bordo inferiore e la linea di base della riga non
      * si muovono. */
-    origine: TransformOrigin = TransformOrigin.Center
+    origine: TransformOrigin = TransformOrigin.Center,
+    /** Durata dell'ombra che appare/scompare col focus. La Sidebar la abbassa: le sue icone sono
+     * piccole e vicine, scorrendole veloce col D-pad un'ombra da 160ms sembra restare "in ritardo"
+     * dietro il focus che si e' gia' spostato. */
+    durataOmbraMs: Int = 160
 ): Modifier {
     val scala by animateFloatAsState(
         targetValue = if (infocata) scalaMax else 1f,
@@ -55,7 +59,7 @@ fun Modifier.zoomInFocus(
     )
     val ombra by animateDpAsState(
         targetValue = if (infocata) ombraMax else 0.dp,
-        animationSpec = tween(durationMillis = 160),
+        animationSpec = tween(durationMillis = durataOmbraMs),
         label = "zoomFocusOmbra"
     )
     return this

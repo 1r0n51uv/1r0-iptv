@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,9 +32,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ir0.iptv.app.logging.RegistroApp
 import com.ir0.iptv.app.settings.Impostazioni
 import com.ir0.iptv.app.theme.Accento
 import com.ir0.iptv.app.theme.LocalAccento
@@ -117,7 +120,76 @@ fun ImpostazioniScreen(
             "Chiavi e contenuto di default si impostano dal Pannello Web" +
                 (indirizzoPannelloWeb?.let { ", su $it" } ?: "") + ": si digita meglio che col telecomando."
         )
+
+        Sezione("Registro dell'app") {
+            RegistroAppSezione()
+        }
     }
+}
+
+/** Crash ed errori applicativi (Sorgenti irraggiungibili, riproduzioni fallite) registrati da
+ * [RegistroApp]: nascosto di default, si legge il file solo quando serve davvero, non ad ogni
+ * apertura delle Impostazioni. */
+@Composable
+private fun RegistroAppSezione() {
+    var mostrato by remember { mutableStateOf(false) }
+    var contenuto by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PulsanteRegistro(
+                testo = if (mostrato) "Nascondi registro" else "Mostra registro",
+                onClick = {
+                    if (!mostrato) contenuto = RegistroApp.leggi()
+                    mostrato = !mostrato
+                }
+            )
+            if (mostrato) {
+                PulsanteRegistro(
+                    testo = "Svuota registro",
+                    onClick = {
+                        RegistroApp.svuota()
+                        contenuto = ""
+                    }
+                )
+            }
+        }
+        if (mostrato) {
+            Text(
+                text = contenuto.ifBlank { "Nessun evento registrato." },
+                color = Color(0xFF9AA0AA),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1A1D22), RoundedCornerShape(8.dp))
+                    .padding(16.dp)
+            )
+        } else {
+            Nota("Crash ed errori dell'app (Sorgenti irraggiungibili, riproduzioni fallite), per capire cosa è successo senza collegare un computer.")
+        }
+    }
+}
+
+@Composable
+private fun PulsanteRegistro(testo: String, onClick: () -> Unit) {
+    var infocato by remember { mutableStateOf(false) }
+    Text(
+        text = testo,
+        color = Color(0xFFF2F2F0),
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .onFocusChanged { infocato = it.isFocused }
+            .clickable(onClick = onClick)
+            .background(Color(0xFF262B33), RoundedCornerShape(8.dp))
+            .border(
+                2.dp,
+                if (infocato) LocalAccento.current else Color.Transparent,
+                RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    )
 }
 
 @Composable

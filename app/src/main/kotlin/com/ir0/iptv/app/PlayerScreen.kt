@@ -55,6 +55,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.ir0.iptv.app.logging.RegistroApp
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.theme.LocalAccento
 import kotlinx.coroutines.delay
@@ -77,11 +78,7 @@ fun PlayerScreen(
     onProgresso: (posizioneMs: Long, durataMs: Long) -> Unit = { _, _ -> },
     /** Chiamato sia a fine riproduzione naturale sia dal comando "Prossimo episodio" nei
      * controlli: chi ascolta fa partire l'Episodio successivo in coda. */
-    onProssimoEpisodio: () -> Unit = {},
-    /** Chiamato quando l'app va in background mentre questo Player e' aperto: la riproduzione si
-     * ferma esplicitamente (oggi Android non lo garantisce da solo), e chi ascolta puo' ricordarsi
-     * dove riprendere alla riapertura invece di tornare sempre alla Dashboard. */
-    onVaInBackground: (posizioneMs: Long) -> Unit = {}
+    onProssimoEpisodio: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scopeRitentativo = rememberCoroutineScope()
@@ -112,6 +109,10 @@ fun PlayerScreen(
     var indicatoreSalto by remember(richiesta.streamUrl) { mutableStateOf<String?>(null) }
     var posizioneMostrata by remember(richiesta.streamUrl) { mutableStateOf(posizioneIniziale) }
     var contatoreInterazioni by remember(richiesta.streamUrl) { mutableStateOf(0) }
+    // Nessun messaggio esisteva finora quando i retry si esaurivano: lo schermo restava nero e
+    // bloccato senza spiegazione. Resta vero finche' non cambia il contenuto (nessun recupero
+    // automatico oltre i retry gia' tentati).
+    var erroreDefinitivo by remember(richiesta.streamUrl) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -173,7 +174,15 @@ fun PlayerScreen(
         // ExoPlayer resta fermo in STATE_IDLE dopo un errore invece di riprendere da solo.
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                if (ritentativi >= RITENTATIVI_MASSIMI_ERRORE) return
+                if (ritentativi >= RITENTATIVI_MASSIMI_ERRORE) {
+                    erroreDefinitivo = true
+                    RegistroApp.errore(
+                        "Player",
+                        "Riproduzione fallita per '${richiesta.titolo}' (${richiesta.streamUrl}) dopo $RITENTATIVI_MASSIMI_ERRORE tentativi",
+                        error
+                    )
+                    return
+                }
                 ritentativi++
                 scopeRitentativo.launch {
                     delay(ATTESA_RITENTATIVO_MS)
@@ -214,7 +223,6 @@ fun PlayerScreen(
             if (event == Lifecycle.Event.ON_STOP) {
                 exoPlayer.playWhenReady = false
                 if (tracciaProgresso) onProgresso(exoPlayer.currentPosition, exoPlayer.durataNota())
-                onVaInBackground(exoPlayer.currentPosition)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -313,6 +321,29 @@ fun PlayerScreen(
                             .background(Color(0x99000000))
                             .padding(horizontal = 20.dp, vertical = 12.dp)
                     )
+                }
+                if (erroreDefinitivo) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xCC000000))
+                            .padding(horizontal = 24.dp, vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Impossibile riprodurre questo contenuto",
+                            color = Color(0xFFF2F2F0),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Controlla la connessione o la Sorgente, poi torna Indietro e riprova.",
+                            color = Color(0xFF9AA0AA),
+                            fontSize = 13.sp
+                        )
+                    }
                 }
                 if (mostraControlli && tracciaProgresso) {
                     BarraControlli(
