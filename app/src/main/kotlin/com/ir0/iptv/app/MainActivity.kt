@@ -1,5 +1,7 @@
 package com.ir0.iptv.app
 
+import com.ir0.iptv.app.theme.RuoloPulsante
+import com.ir0.iptv.app.theme.coloriPulsante
 import android.app.Activity
 import android.content.Context
 import android.os.Bundle
@@ -493,6 +495,8 @@ private fun ContentScreen(
     }
 
     val focusSidebarSezione = remember { FocusRequester() }
+    // La Sidebar si allarga solo se ci si entra con SINISTRA dai contenuti (vedi exit sotto).
+    var sidebarApertaDallUtente by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalAccento provides Accento.daNome(impostazioni.accento).colore) {
         // Box, non piu' Row: la Sidebar sta sopra i contenuti (zIndex) e si allarga con le
         // etichette quando ha il focus, senza rimpaginare la schermata sotto.
@@ -507,7 +511,9 @@ private fun ContentScreen(
                 focusSezioneCorrente = focusSidebarSezione,
                 inAggiornamento = inAggiornamento,
                 progressoFrazionale = progressoFrazionale,
-                onAggiorna = { richiesteDiAggiornamento++ }
+                onAggiorna = { richiesteDiAggiornamento++ },
+                apertaDallUtente = sidebarApertaDallUtente,
+                onChiusa = { sidebarApertaDallUtente = false }
             )
             Box(
                 // La Sidebar si raggiunge solo con SINISTRA, e da qualsiasi punto dei contenuti
@@ -519,8 +525,12 @@ private fun ContentScreen(
                     .ingressoSchermata(chiave = sopra ?: destinazione)
                     .focusProperties {
                         exit = { direzione ->
-                            if (direzione == FocusDirection.Left) focusSidebarSezione
-                            else FocusRequester.Cancel
+                            if (direzione == FocusDirection.Left) {
+                                sidebarApertaDallUtente = true
+                                focusSidebarSezione
+                            } else {
+                                FocusRequester.Cancel
+                            }
                         }
                     }
                     .focusGroup()
@@ -541,6 +551,10 @@ private fun ContentScreen(
                             onRiproduciCon = { richiesta -> RiproduciCon.avvia(context, richiesta) },
                             onResetVisti = { chiavi ->
                                 vistoRepository.rimuoviVisti(chiavi)
+                                refreshDati++
+                            },
+                            onSegnaVisto = { richiesta ->
+                                vistoRepository.segnaComeVisto(richiesta)
                                 refreshDati++
                             }
                         )
@@ -720,17 +734,17 @@ private fun DialogoUscita(onConferma: () -> Unit, onAnnulla: () -> Unit) {
 @Composable
 private fun PulsanteDialogo(testo: String, focusRequester: FocusRequester? = null, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
-    val accento = LocalAccento.current
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocato)
     Text(
         text = testo,
-        color = if (infocato) Color(0xFF0A0B0E) else Color(0xFFF2F2F0),
+        color = colori.contenuto,
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { infocato = it.isFocused }
             .clip(RoundedCornerShape(8.dp))
-            .background(if (infocato) accento else Color(0xFF1E2027))
+            .background(colori.sfondo)
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp)
     )

@@ -40,6 +40,34 @@ class RegistroVistiTest {
     }
 
     @Test
+    fun `an Episode never played can be marked as watched`() {
+        val visti = registro.segnaComeVisto(
+            emptyList(),
+            episodio(chiave = "s01e01", serie = "Dark", posizioneMs = 0, durataMs = 0, aggiornatoIl = 42)
+        )
+
+        val visto = visti.single()
+        assertTrue(registro.completato(visto))
+        assertEquals(100, registro.percentuale(visti, "s01e01"))
+        assertEquals(42, visto.aggiornatoIl)
+    }
+
+    @Test
+    fun `marking a half watched Episode as watched keeps its real duration`() {
+        val iniziale = listOf(episodio(chiave = "s01e01", serie = "Dark", posizioneMs = 600_000, durataMs = 1_800_000))
+
+        val visti = registro.segnaComeVisto(
+            iniziale,
+            episodio(chiave = "s01e01", serie = "Dark", posizioneMs = 0, durataMs = 0, aggiornatoIl = 42)
+        )
+
+        assertEquals(1, visti.size)
+        assertEquals(1_800_000, visti.single().durataMs)
+        assertTrue(registro.completato(visti.single()))
+        assertNull(registro.posizioneDiRipresa(visti, "s01e01"))
+    }
+
+    @Test
     fun `there is no resume position for a content never opened`() {
         assertNull(registro.posizioneDiRipresa(emptyList(), "mai-aperto"))
     }

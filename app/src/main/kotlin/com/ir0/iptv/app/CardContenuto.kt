@@ -95,11 +95,6 @@ fun CardContenuto(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val forma = RoundedCornerShape(8.dp)
-        val anello by animateFloatAsState(
-            targetValue = if (infocata) 1f else 0f,
-            animationSpec = tween(durationMillis = 180),
-            label = "anelloCard"
-        )
         Box(
             // Contenitore a dimensione fissa: e' questo il bersaglio del focus e del
             // "bring into view" del contenitore a scorrimento. Lo zoom NON va messo qui: la
@@ -127,8 +122,6 @@ fun CardContenuto(
                 .zoomInFocus(infocata, forma, scalaMax = 1.08f, ombraMax = 28.dp, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
                 .background(Palette.superficieAlta)
-                // Anello chiaro a fuoco (non l'accento): si legge su qualunque locandina.
-                .border(2.5.dp, Palette.testo.copy(alpha = anello), forma)
         ) {
             val imageUrl = card.imageUrl
             if (imageUrl != null) {

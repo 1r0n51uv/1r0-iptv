@@ -1,5 +1,8 @@
 package com.ir0.iptv.app
 
+import com.ir0.iptv.app.theme.RuoloPulsante
+import com.ir0.iptv.app.theme.coloriPulsante
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -113,13 +116,15 @@ fun DetailScreen(
     onRiproduciCon: (RichiestaRiproduzione) -> Unit,
     /** Azzera i Visti la cui Chiave di Identita' e' tra quelle date: un singolo Episodio o
      * tutti gli Episodi di una Stagione (vedi VistoRepository.rimuoviVisti). */
-    onResetVisti: (Set<String>) -> Unit = {}
+    onResetVisti: (Set<String>) -> Unit = {},
+    /** Segna un Episodio come visto senza doverlo riprodurre (vedi VistoRepository.segnaComeVisto). */
+    onSegnaVisto: (RichiestaRiproduzione) -> Unit = {}
 ) {
     when (card) {
         is ContentCard.Film -> DettaglioFilm(card, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon)
 
         is ContentCard.SerieCard.Pronta ->
-            DettaglioSerie(card, card.serie, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti)
+            DettaglioSerie(card, card.serie, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti, onSegnaVisto)
 
         is ContentCard.SerieCard.DaCaricare -> {
             var serie by remember(card) { mutableStateOf(DettaglioCache.serie(card.chiaveIdentita)) }
@@ -134,7 +139,7 @@ fun DetailScreen(
             val serieCorrente = serie
             when {
                 serieCorrente != null -> DettaglioSerie(
-                    card, serieCorrente, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti
+                    card, serieCorrente, visti, preferito, onCambiaPreferito, onRiproduci, onRiproduciCon, onResetVisti, onSegnaVisto
                 )
 
                 fallita -> DettaglioErrore(card.title)
@@ -220,7 +225,8 @@ private fun DettaglioSerie(
     onCambiaPreferito: () -> Unit,
     onRiproduci: (RichiestaRiproduzione, Long, List<RichiestaRiproduzione>) -> Unit,
     onRiproduciCon: (RichiestaRiproduzione) -> Unit,
-    onResetVisti: (Set<String>) -> Unit
+    onResetVisti: (Set<String>) -> Unit,
+    onSegnaVisto: (RichiestaRiproduzione) -> Unit
 ) {
     val prossima = remember(serie, visti) { resolver.risolvi(serie, visti) }
     var stagioneSelezionata by remember(serie) {
@@ -322,17 +328,38 @@ private fun DettaglioSerie(
                 }
             }
             PulsantePreferito(preferito, onCambiaPreferito)
-            // Sulle card (Dashboard/Sfoglia) c'e' gia' "Togli da Continua a guardare", ma solo
-            // quando la Serie vi compare. Qui, sulla sua pagina, l'azione e' sempre a portata di
-            // mano quando c'e' almeno un Episodio visto: utile per un rewatch o per pulizia,
-            // senza dover prima trovare la card giusta altrove.
-            if (visti.any { it.serie == serie.name }) {
-                PulsanteAzione(
-                    testo = "Segna serie come non vista",
-                    icona = Icons.Filled.RemoveCircleOutline,
-                    onClick = {
+            // Le azioni meno frequenti stanno in un menu "Altro" invece che in fila coi pulsanti
+            // principali: la riga resta corta, e il menu ha spazio per le opzioni future.
+            var menuAltroAperto by remember { mutableStateOf(false) }
+            PulsanteAzione(
+                testo = "Altro",
+                icona = Icons.Filled.MoreHoriz,
+                onClick = { menuAltroAperto = true }
+            )
+            if (menuAltroAperto) {
+                // "Riproduci con" sul prossimo Episodio da guardare (o sul primo, a Serie finita).
+                val episodioDiRiferimento = when (prossima) {
+                    is ProssimaVisione.Riprendi -> prossima.episodio
+                    is ProssimaVisione.Inizia -> prossima.episodio
+                    ProssimaVisione.Completata -> primoEpisodio
+                }
+                MenuSerie(
+                    serie = serie,
+                    copertina = serie.poster ?: card.imageUrl,
+                    // Sulle card (Dashboard/Sfoglia) c'e' gia' "Togli da Continua a guardare", ma
+                    // solo quando la Serie vi compare; qui l'azione c'e' appena un Episodio e' visto.
+                    haVisti = visti.any { it.serie == serie.name },
+                    onRiproduciCon = episodioDiRiferimento?.let { episodio ->
+                        {
+                            menuAltroAperto = false
+                            onRiproduciCon(richiestaDi(episodio))
+                        }
+                    },
+                    onSegnaNonVista = {
+                        menuAltroAperto = false
                         onResetVisti(serie.seasons.flatMap { it.episodes }.map { it.chiaveIdentita }.toSet())
-                    }
+                    },
+                    onChiudi = { menuAltroAperto = false }
                 )
             }
         }
@@ -370,7 +397,8 @@ private fun DettaglioSerie(
                     )
                 },
                 onEpisodioRiproduciCon = { episodio -> onRiproduciCon(richiestaDi(episodio)) },
-                onEpisodioSegnaNonVisto = { episodio -> onResetVisti(setOf(episodio.chiaveIdentita)) }
+                onEpisodioSegnaNonVisto = { episodio -> onResetVisti(setOf(episodio.chiaveIdentita)) },
+                onEpisodioSegnaVisto = { episodio -> onSegnaVisto(richiestaDi(episodio)) }
             )
         }
     }
@@ -607,18 +635,9 @@ private fun PulsanteAzione(
     onClick: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
-    // A fuoco qualunque pulsante diventa bianco pieno (testo inchiostro); a riposo il principale
-    // resta d'accento, gli altri sono "vetro" traslucido sopra la scenografia.
-    val sfondo by animateColorAsState(
-        targetValue = when {
-            infocato -> Palette.testo
-            principale -> LocalAccento.current
-            else -> Palette.testo.copy(alpha = 0.14f)
-        },
-        animationSpec = tween(durationMillis = 180),
-        label = "fondoPulsanteAzione"
-    )
-    val colore = if (infocato) Palette.inchiostro else Palette.testo
+    val colori = coloriPulsante(if (principale) RuoloPulsante.PRIMARIO else RuoloPulsante.SECONDARIO, infocato)
+    val sfondo = colori.sfondo
+    val colore = colori.contenuto
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -652,13 +671,11 @@ private fun PulsanteAzione(
 @Composable
 private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocato)
     Text(
         text = if (preferito) "★ Nei Preferiti" else "☆ Preferiti",
-        color = when {
-            infocato -> Palette.inchiostro
-            preferito -> LocalAccento.current
-            else -> Palette.testo
-        },
+        // A riposo la stella piena resta d'accento; a fuoco vale la regola comune dei pulsanti.
+        color = if (preferito && !infocato) LocalAccento.current else colori.contenuto,
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
@@ -666,7 +683,7 @@ private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
             .zoomInFocus(infocato, RoundedCornerShape(10.dp), scalaMax = 1.06f, ombraMax = 14.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .background(if (infocato) Palette.testo else Palette.testo.copy(alpha = 0.14f))
+            .background(colori.sfondo)
             .padding(horizontal = 22.dp, vertical = 11.dp)
     )
 }
@@ -779,7 +796,8 @@ private fun CarouselEpisodi(
     visti: List<Visto>,
     onEpisodioClick: (Episodio) -> Unit,
     onEpisodioRiproduciCon: (Episodio) -> Unit,
-    onEpisodioSegnaNonVisto: (Episodio) -> Unit
+    onEpisodioSegnaNonVisto: (Episodio) -> Unit,
+    onEpisodioSegnaVisto: (Episodio) -> Unit
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -795,9 +813,12 @@ private fun CarouselEpisodi(
                 immagine = immagine,
                 percentuale = registro.percentuale(visti, episodio.chiaveIdentita),
                 haVisto = visti.any { it.chiaveIdentita == episodio.chiaveIdentita },
+                completato = visti.firstOrNull { it.chiaveIdentita == episodio.chiaveIdentita }
+                    ?.let { registro.completato(it) } == true,
                 onClick = { onEpisodioClick(episodio) },
                 onRiproduciCon = { onEpisodioRiproduciCon(episodio) },
-                onSegnaNonVisto = { onEpisodioSegnaNonVisto(episodio) }
+                onSegnaNonVisto = { onEpisodioSegnaNonVisto(episodio) },
+                onSegnaVisto = { onEpisodioSegnaVisto(episodio) }
             )
         }
     }
@@ -809,9 +830,11 @@ private fun CardEpisodio(
     immagine: String?,
     percentuale: Int,
     haVisto: Boolean,
+    completato: Boolean,
     onClick: () -> Unit,
     onRiproduciCon: () -> Unit,
-    onSegnaNonVisto: () -> Unit
+    onSegnaNonVisto: () -> Unit,
+    onSegnaVisto: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
     var menuAperto by remember { mutableStateOf(false) }
@@ -827,14 +850,9 @@ private fun CardEpisodio(
             modifier = Modifier
                 .width(240.dp)
                 .height(135.dp)
-                .zoomInFocus(infocato, forma, origine = TransformOrigin(0.5f, 1f))
+                .zoomInFocus(infocato, forma, scalaMax = 1.08f, ombraMax = 28.dp, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
-                .background(Color(0xFF1E2027))
-                .border(
-                    2.dp,
-                    if (infocato) LocalAccento.current else Color.Transparent,
-                    forma
-                )
+                .background(Palette.superficieAlta)
         ) {
             if (immagine != null) {
                 AsyncImage(
@@ -856,7 +874,7 @@ private fun CardEpisodio(
         }
         Text(
             text = episodio.episodeNumber?.let { "$it. ${episodio.title}" } ?: episodio.title,
-            color = Color(0xFFF2F2F0),
+            color = if (infocato) Palette.testo else Palette.testoSecondario,
             fontSize = 14.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -867,6 +885,7 @@ private fun CardEpisodio(
             episodio = episodio,
             copertina = immagine,
             haVisto = haVisto,
+            completato = completato,
             onRiproduciCon = {
                 menuAperto = false
                 onRiproduciCon()
@@ -874,6 +893,10 @@ private fun CardEpisodio(
             onSegnaNonVisto = {
                 menuAperto = false
                 onSegnaNonVisto()
+            },
+            onSegnaVisto = {
+                menuAperto = false
+                onSegnaVisto()
             },
             onChiudi = { menuAperto = false }
         )

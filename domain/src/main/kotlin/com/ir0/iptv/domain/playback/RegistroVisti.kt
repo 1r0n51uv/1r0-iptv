@@ -2,6 +2,7 @@ package com.ir0.iptv.domain.playback
 
 private const val SOGLIA_COMPLETAMENTO = 0.95
 private const val POSIZIONE_MINIMA_MS = 15_000L
+private const val DURATA_SIMBOLICA_MS = 1L
 
 const val MAX_VISTI = 200
 
@@ -9,6 +10,16 @@ class RegistroVisti {
 
     fun registra(visti: List<Visto>, visto: Visto): List<Visto> =
         (listOf(visto) + visti.filterNot { it.chiaveIdentita == visto.chiaveIdentita }).take(MAX_VISTI)
+
+    /** Segna [visto] come completato senza averlo riprodotto fino in fondo. Se c'e' gia' un Visto
+     * con una durata vera la posizione va alla fine di quella; altrimenti (mai riprodotto, durata
+     * ignota) si usa una durata simbolica, quanto basta perche' risulti completato al 100%. */
+    fun segnaComeVisto(visti: List<Visto>, visto: Visto): List<Visto> {
+        val durata = visti.firstOrNull { it.chiaveIdentita == visto.chiaveIdentita }
+            ?.durataMs?.takeIf { it > 0 }
+            ?: DURATA_SIMBOLICA_MS
+        return registra(visti, visto.copy(posizioneMs = durata, durataMs = durata))
+    }
 
     fun completato(visto: Visto): Boolean =
         visto.durataMs > 0 && visto.posizioneMs >= visto.durataMs * SOGLIA_COMPLETAMENTO

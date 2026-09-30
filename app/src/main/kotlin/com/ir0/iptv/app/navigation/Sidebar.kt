@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import com.ir0.iptv.app.EasingCinema
 import com.ir0.iptv.app.theme.LocalAccento
 import com.ir0.iptv.app.theme.Palette
+import com.ir0.iptv.app.theme.contenutoSopra
 import com.ir0.iptv.app.zoomInFocus
 
 /** Larghezza a riposo della Sidebar: i contenuti partono da qui (la Sidebar sta sopra di loro). */
@@ -98,9 +99,19 @@ fun Sidebar(
      * sia partito davvero). */
     progressoFrazionale: Float? = null,
     onAggiorna: () -> Unit = {},
+    /** Vero solo quando l'utente e' entrato nella Sidebar premendo SINISTRA dai contenuti (lo
+     * imposta MainActivity nell'exit del gruppo dei contenuti). */
+    apertaDallUtente: Boolean = false,
+    /** Chiamato quando la Sidebar perde il focus: MainActivity azzera [apertaDallUtente]. */
+    onChiusa: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var espansa by remember { mutableStateOf(false) }
+    // Si allarga SOLO se ci si e' entrati con SINISTRA, non per il semplice fatto di avere il
+    // focus: all'avvio, aprendo un Dettaglio/il Player o tornandone, il focus puo' finire sulla
+    // Sidebar da solo (la card premuta esce di composizione, la schermata nuova non ha ancora
+    // preso il focus) e la Sidebar si apriva "a caso".
+    var haFocus by remember { mutableStateOf(false) }
+    val espansa = haFocus && apertaDallUtente
     val larghezza by animateDpAsState(
         targetValue = if (espansa) LARGHEZZA_ESPANSA else LARGHEZZA_SIDEBAR,
         animationSpec = tween(durationMillis = 320, easing = EasingCinema),
@@ -134,7 +145,10 @@ fun Sidebar(
             modifier = Modifier
                 .fillMaxHeight()
                 .padding(vertical = 12.dp)
-                .onFocusChanged { espansa = it.hasFocus }
+                .onFocusChanged {
+                    haFocus = it.hasFocus
+                    if (!it.hasFocus) onChiusa()
+                }
                 .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(SPAZIATURA, Alignment.CenterVertically)
         ) {
@@ -209,7 +223,7 @@ private fun TaccaCorrente(visibile: Boolean, colore: Color) {
     )
 }
 
-/** Icona della sezione: a fuoco diventa un tassello chiaro con il glifo in inchiostro. */
+/** Icona della sezione: a fuoco diventa un tassello d'accento (regola comune dei pulsanti, theme/Pulsanti.kt). */
 @Composable
 private fun SidebarButton(
     icona: ImageVector,
@@ -224,7 +238,7 @@ private fun SidebarButton(
     val accento = LocalAccento.current
     val forma = RoundedCornerShape(12.dp)
     val fondo by animateColorAsState(
-        targetValue = if (isFocused) Palette.testo else Color.Transparent,
+        targetValue = if (isFocused) accento else Color.Transparent,
         animationSpec = tween(durationMillis = 140),
         label = "fondoIconaSidebar"
     )
@@ -254,7 +268,7 @@ private fun SidebarButton(
                 imageVector = icona,
                 contentDescription = descrizione,
                 tint = when {
-                    isFocused -> Palette.inchiostro
+                    isFocused -> contenutoSopra(accento)
                     active -> Palette.testo
                     else -> Palette.testoSecondario
                 },
@@ -277,7 +291,7 @@ private fun RefreshButton(
     val accento = LocalAccento.current
     val forma = RoundedCornerShape(12.dp)
     val fondo by animateColorAsState(
-        targetValue = if (isFocused) Palette.testo else Color.Transparent,
+        targetValue = if (isFocused) accento else Color.Transparent,
         animationSpec = tween(durationMillis = 140),
         label = "fondoAggiornaSidebar"
     )
@@ -352,7 +366,7 @@ private fun RefreshButton(
                 imageVector = Icons.Filled.Autorenew,
                 contentDescription = descrizione,
                 tint = when {
-                    isFocused -> Palette.inchiostro
+                    isFocused -> contenutoSopra(accento)
                     inAggiornamento -> Palette.testoTerziario
                     else -> Palette.testoSecondario
                 },

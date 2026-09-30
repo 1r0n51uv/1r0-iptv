@@ -1,5 +1,7 @@
 package com.ir0.iptv.app
 
+import com.ir0.iptv.app.theme.RuoloPulsante
+import com.ir0.iptv.app.theme.coloriPulsante
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -51,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -166,7 +169,9 @@ fun DashboardScreen(
     // (l'ultima composta) invece che all'hero — un salto silenzioso subito dopo l'apertura, prima
     // di qualunque tasto premuto. Qui si decide UNA sola riga bersaglio, mai l'hero se gia' lui
     // stesso corrisponde a chiaveDaFocalizzare.
-    val heroHaChiaveDaFocalizzare = hero != null && hero.chiaveIdentita == chiaveDaFocalizzare
+    // Senza una card da ripristinare (primo avvio della Home) il focus va comunque sull'hero: altrimenti
+    // restava senza bersaglio e finiva sulla Sidebar.
+    val heroHaChiaveDaFocalizzare = hero != null && (hero.chiaveIdentita == chiaveDaFocalizzare || chiaveDaFocalizzare == null)
     val rigaConChiaveDaFocalizzare = remember(righe, ordine, hero, chiaveDaFocalizzare) {
         if (heroHaChiaveDaFocalizzare || chiaveDaFocalizzare == null) {
             null
@@ -180,7 +185,7 @@ fun DashboardScreen(
 
     LaunchedEffect(chiaveDaFocalizzare, righe, ordine, hero) {
         when {
-            hero != null && hero.chiaveIdentita == chiaveDaFocalizzare -> {
+            heroHaChiaveDaFocalizzare -> {
                 statoColonna.scrollTo(0)
                 runCatching { focusRequester.requestFocus() }
                 // Dare il focus al pulsante Riprendi innesca un bring-into-view che puo'
@@ -218,7 +223,7 @@ fun DashboardScreen(
                 preferito = elencoPreferiti.preferito(personalizzazioni, hero),
                 daRiprendere = heroDaRiprendere,
                 caricando = heroDaRiprendere && caricandoRipresa,
-                focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
+                focusRequester = focusRequester.takeIf { heroHaChiaveDaFocalizzare },
                 focusRequesterGiu = focusRequesterPrimaRiga.takeIf { primaSezioneConContenuto != null },
                 // Risalendo col D-pad, quando il pulsante prende il focus si riporta la colonna
                 // in cima cosi' la banda "Continua a guardare" si vede tutta. Va rifatto per
@@ -525,12 +530,9 @@ private fun HeroContinua(
                     )
                 }
             }
-            val fondoPulsante by animateColorAsState(
-                targetValue = if (pulsanteInfocato) Palette.testo else Palette.testo.copy(alpha = 0.16f),
-                animationSpec = tween(durationMillis = 180),
-                label = "fondoRiprendi"
-            )
-            val colorePulsante = if (pulsanteInfocato) Palette.inchiostro else Palette.testo
+            val coloriRiprendi = coloriPulsante(RuoloPulsante.PRIMARIO, pulsanteInfocato)
+            val fondoPulsante = coloriRiprendi.sfondo
+            val colorePulsante = coloriRiprendi.contenuto
             Row(
                 modifier = Modifier
                     .padding(top = 8.dp)
@@ -582,8 +584,8 @@ fun RigaContenuti(
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
     focusRequester: FocusRequester?,
-    /** Bersaglio di GIU' dal pulsante Riprendi dell'hero: quando non null va sulla prima card di
-     * questa riga (solo la riga che l'hero ha scelto come prima con contenuti lo passa). */
+    /** Bersaglio di GIU' dal pulsante Riprendi dell'hero: quando non null va sulla prima card
+     * visibile di questa riga (solo la riga che l'hero ha scelto come prima con contenuti lo passa). */
     focusRequesterPrimoElemento: FocusRequester? = null,
     onClick: (ContentCard) -> Unit,
     onLongClick: (ContentCard) -> Unit = {},
@@ -615,6 +617,12 @@ fun RigaContenuti(
     LaunchedEffect(chiaveDaFocalizzare, contenuti) {
         if (indiceDaFocalizzare > 0) statoRiga.scrollToItem(indiceDaFocalizzare)
     }
+    // Il bersaglio di GIU' dall'hero va sulla prima card VISIBILE, non sulla card 0: appena la
+    // riga era scorsa (ripristino del focus su una card lontana, o scorrendo a destra e poi
+    // risalendo sull'hero) la card 0 usciva di composizione, il FocusRequester restava senza nodo
+    // e GIU' dal pulsante Riprendi non faceva nulla (l'eccezione di Compose veniva inghiottita da
+    // MainActivity.dispatchKeyEvent). La prima visibile e' sempre composta.
+    val primaVisibile by remember { derivedStateOf { statoRiga.firstVisibleItemIndex } }
 
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         TitoloRiga(titolo)
@@ -631,7 +639,7 @@ fun RigaContenuti(
                     percentuale = registroVisti.percentuale(visti, card.chiaveIdentita),
                     preferito = elencoPreferiti.preferito(personalizzazioni, card),
                     focusRequester = focusRequester.takeIf { card.chiaveIdentita == chiaveDaFocalizzare },
-                    focusRequesterAggiuntivo = focusRequesterPrimoElemento.takeIf { indice == 0 },
+                    focusRequesterAggiuntivo = focusRequesterPrimoElemento.takeIf { indice == primaVisibile },
                     onClick = { onClick(card) },
                     onLongClick = { onLongClick(card) },
                     onFocalizzata = { onFocalizzata(card) }

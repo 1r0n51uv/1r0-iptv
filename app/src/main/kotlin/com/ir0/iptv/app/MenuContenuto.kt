@@ -1,5 +1,10 @@
 package com.ir0.iptv.app
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import com.ir0.iptv.app.theme.Palette
+import com.ir0.iptv.app.theme.contenutoSopra
+import com.ir0.iptv.domain.classification.Serie
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Launch
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
@@ -138,14 +144,17 @@ fun MenuContenuto(
 }
 
 /** Le azioni rapide su un Episodio, aperte tenendo premuto OK sulla sua card nel Dettaglio Serie:
- * "Riproduci con" c'e' sempre, "Segna come non visto" solo se l'Episodio ha un Visto. */
+ * "Riproduci con" c'e' sempre, "Segna come visto" finche' l'Episodio non e' completato, "Segna
+ * come non visto" solo se l'Episodio ha un Visto. */
 @Composable
 fun MenuEpisodio(
     episodio: Episodio,
     copertina: String?,
     haVisto: Boolean,
+    completato: Boolean,
     onRiproduciCon: () -> Unit,
     onSegnaNonVisto: () -> Unit,
+    onSegnaVisto: () -> Unit,
     onChiudi: () -> Unit
 ) {
     val primoFocus = remember { FocusRequester() }
@@ -156,11 +165,64 @@ fun MenuEpisodio(
             focusRequester = primoFocus,
             onClick = onRiproduciCon
         )
+        if (!completato) {
+            VoceMenu(
+                testo = "Segna come visto",
+                icona = Icons.Filled.CheckCircle,
+                onClick = onSegnaVisto
+            )
+        }
         if (haVisto) {
             VoceMenu(
                 testo = "Segna come non visto",
                 icona = Icons.Filled.RemoveCircleOutline,
                 onClick = onSegnaNonVisto
+            )
+        }
+    }
+}
+
+/** Il menu "Altro" del Dettaglio Serie: le azioni sulla Serie intera che non meritano un pulsante
+ * fisso accanto a Play e Preferiti. "Riproduci con" c'e' quando c'e' un Episodio di riferimento,
+ * "Segna serie come non vista" solo se almeno un Episodio e' visto. Nuove azioni sulla Serie vanno
+ * aggiunte qui. */
+@Composable
+fun MenuSerie(
+    serie: Serie,
+    copertina: String?,
+    haVisti: Boolean,
+    onRiproduciCon: (() -> Unit)?,
+    onSegnaNonVista: () -> Unit,
+    onChiudi: () -> Unit
+) {
+    val primoFocus = remember { FocusRequester() }
+    MenuRapido(chiaveFocus = serie, cover = copertina, titolo = serie.name, onChiudi = onChiudi, primoFocus = primoFocus) {
+        var primoAssegnato = false
+        fun focusPerLaPrima(): FocusRequester? = if (primoAssegnato) null else primoFocus.also { primoAssegnato = true }
+        if (onRiproduciCon != null) {
+            VoceMenu(
+                testo = "Riproduci con…",
+                icona = Icons.AutoMirrored.Filled.Launch,
+                focusRequester = focusPerLaPrima(),
+                onClick = onRiproduciCon
+            )
+        }
+        if (haVisti) {
+            VoceMenu(
+                testo = "Segna serie come non vista",
+                icona = Icons.Filled.RemoveCircleOutline,
+                focusRequester = focusPerLaPrima(),
+                onClick = onSegnaNonVista
+            )
+        }
+        if (!primoAssegnato) {
+            // Nessuna azione disponibile: una riga non focalizzabile invece di un menu vuoto (e il
+            // FocusRequester resta senza nodo: la requestFocus del guscio e' gia' protetta).
+            Text(
+                text = "Nessuna azione disponibile per ora.",
+                color = Palette.testoSecondario,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
         }
     }
@@ -299,6 +361,14 @@ private fun VoceMenu(
     onClick: () -> Unit
 ) {
     var infocata by remember { mutableStateOf(false) }
+    val accento = LocalAccento.current
+    // Stessa regola dei pulsanti (vedi theme/Pulsanti.kt): a fuoco la voce si riempie d'accento.
+    val sfondo by animateColorAsState(
+        targetValue = if (infocata) accento else Color.Transparent,
+        animationSpec = tween(durationMillis = 160),
+        label = "sfondoVoceMenu"
+    )
+    val contenuto = if (infocata) contenutoSopra(accento) else Palette.testo
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -307,18 +377,18 @@ private fun VoceMenu(
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (infocata) Color(0xFF2A2D35) else Color.Transparent)
+            .background(sfondo)
             .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Icon(
             imageVector = icona,
             contentDescription = null,
-            tint = coloreIcona ?: Color(0xFFC7CAD0),
+            tint = if (infocata) contenuto else coloreIcona ?: Color(0xFFC7CAD0),
             modifier = Modifier.size(20.dp)
         )
         Text(
             text = testo,
-            color = Color(0xFFF2F2F0),
+            color = contenuto,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold
         )

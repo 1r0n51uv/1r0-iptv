@@ -63,13 +63,10 @@ private fun CardPartita(conCanale: PartitaConCanale, onClick: (ContentCard.Canal
         modifier = Modifier
             .width(320.dp)
             .onFocusChanged { infocata = it.isFocused }
+            // Come le card dei contenuti: niente anello, a fuoco si ingrandisce e si schiarisce.
+            .zoomInFocus(infocata, RoundedCornerShape(10.dp), scalaMax = 1.05f, ombraMax = 20.dp)
             .let { if (canale != null) it.clickable { onClick(canale) } else it }
-            .background(Color(0xFF17191F), RoundedCornerShape(10.dp))
-            .border(
-                2.dp,
-                if (infocata) LocalAccento.current else Color.Transparent,
-                RoundedCornerShape(10.dp)
-            )
+            .background(if (infocata) Color(0xFF24272F) else Color(0xFF17191F), RoundedCornerShape(10.dp))
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {

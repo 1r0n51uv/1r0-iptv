@@ -69,6 +69,26 @@ class VistoRepository(
         file.writeText(JSONArray(elenco().filterNot { it.chiaveIdentita in chiavi }.map { it.toJson() }).toString())
     }
 
+    /** Segna come visto un Episodio (o Film) senza averlo riprodotto fino in fondo: da "Segna come
+     * visto" nel menu dell'Episodio. Conta come l'ultima cosa guardata, quindi la sua Serie sale in
+     * "Continua a guardare" pronta sull'Episodio successivo. */
+    @Synchronized
+    fun segnaComeVisto(richiesta: RichiestaRiproduzione) {
+        val tipo = richiesta.tipo ?: return
+        val visto = Visto(
+            chiaveIdentita = richiesta.chiaveIdentita,
+            tipo = tipo,
+            titolo = richiesta.titolo,
+            streamUrl = richiesta.streamUrl,
+            posizioneMs = 0,
+            durataMs = 0,
+            aggiornatoIl = orologio(),
+            serie = richiesta.serie,
+            posterUrl = richiesta.posterUrl
+        )
+        file.writeText(JSONArray(registro.segnaComeVisto(elenco(), visto).map { it.toJson() }).toString())
+    }
+
     @Synchronized
     fun registraProgresso(richiesta: RichiestaRiproduzione, posizioneMs: Long, durataMs: Long) {
         val tipo = richiesta.tipo ?: return

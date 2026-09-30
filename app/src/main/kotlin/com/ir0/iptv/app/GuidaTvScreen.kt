@@ -1,5 +1,7 @@
 package com.ir0.iptv.app
 
+import com.ir0.iptv.app.theme.RuoloPulsante
+import com.ir0.iptv.app.theme.coloriPulsante
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -97,9 +99,14 @@ private fun VoceCanale(
     onClick: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocato)
     Text(
         text = canale.title,
-        color = if (attivo) LocalAccento.current else Color(0xFFC7CAD0),
+        color = when {
+            infocato -> colori.contenuto
+            attivo -> LocalAccento.current
+            else -> Color(0xFFC7CAD0)
+        },
         fontSize = 15.sp,
         fontWeight = if (attivo) FontWeight.SemiBold else FontWeight.Normal,
         maxLines = 1,
@@ -111,8 +118,14 @@ private fun VoceCanale(
                 if (it.isFocused) onFocus()
             }
             .clickable(onClick = onClick)
-            .background(if (attivo) Color(0xFF17191F) else Color.Transparent, RoundedCornerShape(8.dp))
-            .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
+            .background(
+                when {
+                    infocato -> colori.sfondo
+                    attivo -> Color(0xFF17191F)
+                    else -> Color.Transparent
+                },
+                RoundedCornerShape(8.dp)
+            )
             .padding(horizontal = 14.dp, vertical = 10.dp)
     )
 }

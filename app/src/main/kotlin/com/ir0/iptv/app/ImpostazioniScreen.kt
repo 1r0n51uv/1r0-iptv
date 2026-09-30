@@ -1,5 +1,8 @@
 package com.ir0.iptv.app
 
+import com.ir0.iptv.app.theme.RuoloPulsante
+import com.ir0.iptv.app.theme.coloriPulsante
+import com.ir0.iptv.app.theme.Palette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -174,20 +177,16 @@ private fun RegistroAppSezione() {
 @Composable
 private fun PulsanteRegistro(testo: String, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocato)
     Text(
         text = testo,
-        color = Color(0xFFF2F2F0),
+        color = colori.contenuto,
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
-            .background(Color(0xFF1E2027), RoundedCornerShape(8.dp))
-            .border(
-                2.dp,
-                if (infocato) LocalAccento.current else Color.Transparent,
-                RoundedCornerShape(8.dp)
-            )
+            .background(colori.sfondo, RoundedCornerShape(8.dp))
             .padding(horizontal = 18.dp, vertical = 10.dp)
     )
 }
@@ -208,14 +207,17 @@ private fun Nota(testo: String) {
 @Composable
 private fun PastigliaColore(accento: Accento, scelto: Boolean, onClick: () -> Unit) {
     var infocata by remember { mutableStateOf(false) }
+    // A fuoco: regola comune dei pulsanti (accento pieno). A riposo il colore scelto e' segnato da
+    // un bordo sottile, cosi' si distingue anche quando il focus e' altrove.
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocata)
     Row(
         modifier = Modifier
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (scelto) Color(0xFF1E2027) else Color(0xFF131519), RoundedCornerShape(8.dp))
+            .background(colori.sfondo, RoundedCornerShape(8.dp))
             .border(
-                2.dp,
-                if (infocata) Color(0xFFF2F2F0) else Color.Transparent,
+                1.5.dp,
+                if (scelto && !infocata) Palette.testo.copy(alpha = 0.7f) else Color.Transparent,
                 RoundedCornerShape(8.dp)
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -302,18 +304,23 @@ private fun scambia(lista: List<SezioneHome>, i: Int, j: Int): List<SezioneHome>
 @Composable
 private fun Interruttore(acceso: Boolean, testo: String, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
+    // A fuoco: regola comune dei pulsanti. A riposo l'opzione attiva ha una spunta e il vetro piu'
+    // acceso, quella spenta il vetro normale e il testo attenuato.
+    val colori = coloriPulsante(RuoloPulsante.SECONDARIO, infocato)
     Text(
-        text = testo,
-        color = if (acceso) Color(0xFF0A0B0E) else Color(0xFFC7CAD0),
+        text = if (acceso) "✓  $testo" else testo,
+        color = when {
+            infocato -> colori.contenuto
+            acceso -> Palette.testo
+            else -> Palette.testoSecondario
+        },
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (acceso) LocalAccento.current else Color(0xFF1E2027), RoundedCornerShape(8.dp))
-            .border(
-                2.dp,
-                if (infocato) Color(0xFFF2F2F0) else Color.Transparent,
+            .background(
+                if (acceso && !infocato) Palette.testo.copy(alpha = 0.24f) else colori.sfondo,
                 RoundedCornerShape(8.dp)
             )
             .padding(horizontal = 18.dp, vertical = 10.dp)
