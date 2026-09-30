@@ -68,7 +68,7 @@ fun GuidaTvScreen(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
+            .background(Color(0xFF0A0B0E))
             .padding(32.dp),
         horizontalArrangement = Arrangement.spacedBy(28.dp)
     ) {
@@ -111,7 +111,7 @@ private fun VoceCanale(
                 if (it.isFocused) onFocus()
             }
             .clickable(onClick = onClick)
-            .background(if (attivo) Color(0xFF1F232A) else Color.Transparent, RoundedCornerShape(8.dp))
+            .background(if (attivo) Color(0xFF17191F) else Color.Transparent, RoundedCornerShape(8.dp))
             .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     )
@@ -158,7 +158,7 @@ private fun VoceProgramma(programma: Programma, inOnda: Boolean, percentuale: In
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (inOnda) Color(0xFF1F232A) else Color.Transparent, RoundedCornerShape(8.dp))
+            .background(if (inOnda) Color(0xFF17191F) else Color.Transparent, RoundedCornerShape(8.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -184,7 +184,7 @@ private fun VoceProgramma(programma: Programma, inOnda: Boolean, percentuale: In
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF3A3F48))
+                    .background(Color(0xFF34373F))
             ) {
                 Box(
                     modifier = Modifier

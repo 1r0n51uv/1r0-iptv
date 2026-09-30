@@ -52,7 +52,7 @@ fun LoadingScreen(messaggio: String = "Caricamento contenuti…") {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
+            .background(Color(0xFF0A0B0E))
             .shimmer(avanzamento)
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
@@ -75,7 +75,7 @@ fun LoadingScreen(messaggio: String = "Caricamento contenuti…") {
                         .width(160.dp)
                         .height(18.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFF1F232A))
+                        .background(Color(0xFF17191F))
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     repeat(6) {
@@ -84,7 +84,7 @@ fun LoadingScreen(messaggio: String = "Caricamento contenuti…") {
                                 .width(200.dp)
                                 .height(112.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF1F232A))
+                                .background(Color(0xFF17191F))
                         )
                     }
                 }

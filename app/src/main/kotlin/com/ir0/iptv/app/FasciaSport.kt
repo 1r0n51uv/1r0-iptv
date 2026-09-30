@@ -64,7 +64,7 @@ private fun CardPartita(conCanale: PartitaConCanale, onClick: (ContentCard.Canal
             .width(320.dp)
             .onFocusChanged { infocata = it.isFocused }
             .let { if (canale != null) it.clickable { onClick(canale) } else it }
-            .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
+            .background(Color(0xFF17191F), RoundedCornerShape(10.dp))
             .border(
                 2.dp,
                 if (infocata) LocalAccento.current else Color.Transparent,

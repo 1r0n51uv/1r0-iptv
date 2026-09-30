@@ -1,5 +1,11 @@
 package com.ir0.iptv.app
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import com.ir0.iptv.app.theme.Palette
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -395,25 +401,45 @@ private fun Pagina(
         }
     }
     MaterialTheme {
-        Surface(color = Color(0xFF14161A)) {
+        Surface(color = Color(0xFF0A0B0E)) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (sfondo != null) {
-                    // La cover del contenuto, sfocata e fissa, fa da sfondo alla pagina.
+                    // La cover del contenuto, appena sfocata, allargata a destra e sfumata verso
+                    // sinistra e verso il basso: fa da scenografia alla pagina senza coprire il testo.
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(sfondo)
-                            .transformations(DownsampleBlurTransformation(targetWidth = 360, radius = 6, passes = 2))
+                            .transformations(DownsampleBlurTransformation(targetWidth = 480, radius = 2, passes = 1))
+                            .crossfade(600)
                             .build(),
                         contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .fillMaxWidth(0.7f)
+                            .fillMaxHeight(0.85f)
+                            .sfumaBordiScenografia(),
                         contentScale = ContentScale.Crop
                     )
                     Box(
                         modifier = Modifier
                             .matchParentSize()
                             .background(
+                                Brush.horizontalGradient(
+                                    0f to Palette.inchiostro,
+                                    0.35f to Palette.inchiostro.copy(alpha = 0.9f),
+                                    0.7f to Palette.inchiostro.copy(alpha = 0.45f),
+                                    1f to Palette.inchiostro.copy(alpha = 0.25f)
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
                                 Brush.verticalGradient(
-                                    listOf(Color(0xCC14161A), Color(0xF214161A))
+                                    0.45f to Color.Transparent,
+                                    0.85f to Palette.inchiostro.copy(alpha = 0.95f),
+                                    1f to Palette.inchiostro
                                 )
                             )
                     )
@@ -446,17 +472,26 @@ private fun Testata(
     caricandoDettagli: Boolean = false,
     azioni: @Composable () -> Unit
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
+    val entrata = remember(titolo) { Animatable(0f) }
+    LaunchedEffect(titolo) { entrata.animateTo(1f, tween(durationMillis = 800, easing = EasingCinema)) }
+    Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         Box(
             modifier = Modifier
                 .width(240.dp)
                 .height(340.dp)
+                .graphicsLayer {
+                    alpha = entrata.value
+                    val scala = 0.94f + 0.06f * entrata.value
+                    scaleX = scala
+                    scaleY = scala
+                }
+                .shadow(elevation = 36.dp, shape = RoundedCornerShape(12.dp), clip = false)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF262B33))
+                .background(Palette.superficieAlta)
         ) {
             if (copertina != null) {
                 AsyncImage(
-                    model = copertina,
+                    model = ImageRequest.Builder(LocalContext.current).data(copertina).crossfade(400).build(),
                     contentDescription = titolo,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -466,14 +501,24 @@ private fun Testata(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = etichetta,
-                color = Color(0xFF14161A),
+                color = Color(0xFF0A0B0E),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .background(coloreEtichetta, RoundedCornerShape(4.dp))
                     .padding(horizontal = 7.dp, vertical = 3.dp)
             )
-            Text(text = titolo, color = Color(0xFFF2F2F0), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = titolo,
+                color = Palette.testo,
+                fontSize = 42.sp,
+                lineHeight = 44.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.8).sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(680.dp)
+            )
             if (meta != null) {
                 Text(text = meta, color = Color(0xFF9AA0AA), fontSize = 15.sp)
             }
@@ -481,7 +526,8 @@ private fun Testata(
                 Text(
                     text = plot,
                     color = Color(0xFFC7CAD0),
-                    fontSize = 14.sp,
+                    fontSize = 16.sp,
+                    lineHeight = 23.sp,
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(640.dp)
@@ -505,7 +551,7 @@ private fun ScheletroDettagliEstesi() {
                 .width(180.dp)
                 .height(13.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF262B33))
+                .background(Color(0xFF1E2027))
         )
         repeat(2) {
             Box(
@@ -513,7 +559,7 @@ private fun ScheletroDettagliEstesi() {
                     .width(280.dp)
                     .height(13.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF262B33))
+                    .background(Color(0xFF1E2027))
             )
         }
     }
@@ -561,12 +607,18 @@ private fun PulsanteAzione(
     onClick: () -> Unit
 ) {
     var infocato by remember { mutableStateOf(false) }
-    val sfondo = when {
-        principale -> LocalAccento.current
-        infocato -> Color(0xFF3A404A)
-        else -> Color(0xFF262B33)
-    }
-    val colore = if (principale) Color(0xFF14161A) else Color(0xFFF2F2F0)
+    // A fuoco qualunque pulsante diventa bianco pieno (testo inchiostro); a riposo il principale
+    // resta d'accento, gli altri sono "vetro" traslucido sopra la scenografia.
+    val sfondo by animateColorAsState(
+        targetValue = when {
+            infocato -> Palette.testo
+            principale -> LocalAccento.current
+            else -> Palette.testo.copy(alpha = 0.14f)
+        },
+        animationSpec = tween(durationMillis = 180),
+        label = "fondoPulsanteAzione"
+    )
+    val colore = if (infocato) Palette.inchiostro else Palette.testo
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -577,10 +629,11 @@ private fun PulsanteAzione(
                 infocato = it.isFocused
                 if (it.isFocused) onInfocato()
             }
+            .zoomInFocus(infocato, RoundedCornerShape(10.dp), scalaMax = 1.06f, ombraMax = 14.dp)
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .background(sfondo, RoundedCornerShape(8.dp))
-            .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .background(sfondo)
+            .padding(horizontal = 22.dp, vertical = 11.dp)
     ) {
         if (icona != null) {
             Icon(imageVector = icona, contentDescription = null, tint = colore, modifier = Modifier.size(18.dp))
@@ -601,15 +654,20 @@ private fun PulsantePreferito(preferito: Boolean, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
     Text(
         text = if (preferito) "★ Nei Preferiti" else "☆ Preferiti",
-        color = if (preferito) LocalAccento.current else Color(0xFFF2F2F0),
+        color = when {
+            infocato -> Palette.inchiostro
+            preferito -> LocalAccento.current
+            else -> Palette.testo
+        },
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .onFocusChanged { infocato = it.isFocused }
+            .zoomInFocus(infocato, RoundedCornerShape(10.dp), scalaMax = 1.06f, ombraMax = 14.dp)
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .background(Color(0xFF262B33), RoundedCornerShape(8.dp))
-            .border(2.dp, if (infocato) Color(0xFFF2F2F0) else Color.Transparent, RoundedCornerShape(8.dp))
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .background(if (infocato) Palette.testo else Palette.testo.copy(alpha = 0.14f))
+            .padding(horizontal = 22.dp, vertical = 11.dp)
     )
 }
 
@@ -665,7 +723,7 @@ private fun SelettoreStagioni(
                     onClick = { espanso = true },
                     onLongClick = { menuAperto = true }.takeIf { haVistoStagione }
                 )
-                .background(Color(0xFF1F232A), RoundedCornerShape(8.dp))
+                .background(Color(0xFF17191F), RoundedCornerShape(8.dp))
                 .border(2.dp, if (infocato || espanso) accento else Color.Transparent, RoundedCornerShape(8.dp))
                 .padding(horizontal = 16.dp, vertical = 9.dp)
         ) {
@@ -677,7 +735,7 @@ private fun SelettoreStagioni(
             )
             Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color(0xFF9AA0AA))
         }
-        MaterialTheme(colorScheme = darkColorScheme(surface = Color(0xFF1F232A), onSurface = Color(0xFFF2F2F0))) {
+        MaterialTheme(colorScheme = darkColorScheme(surface = Color(0xFF17191F), onSurface = Color(0xFFF2F2F0))) {
             DropdownMenu(
                 expanded = espanso,
                 onDismissRequest = { espanso = false },
@@ -771,7 +829,7 @@ private fun CardEpisodio(
                 .height(135.dp)
                 .zoomInFocus(infocato, forma, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
-                .background(Color(0xFF262B33))
+                .background(Color(0xFF1E2027))
                 .border(
                     2.dp,
                     if (infocato) LocalAccento.current else Color.Transparent,
@@ -828,7 +886,7 @@ private fun BarraProgresso(percentuale: Int, modifier: Modifier = Modifier) {
         modifier = modifier
             .height(4.dp)
             .clip(CircleShape)
-            .background(Color(0xFF3A3F48))
+            .background(Color(0xFF34373F))
     ) {
         Box(
             modifier = Modifier

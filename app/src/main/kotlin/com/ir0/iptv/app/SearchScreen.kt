@@ -75,7 +75,7 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A)),
+            .background(Color(0xFF0A0B0E)),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         BasicTextField(
@@ -89,10 +89,10 @@ fun SearchScreen(
                 .padding(horizontal = 32.dp)
                 .padding(top = 32.dp)
                 .onFocusChanged { infocato = it.isFocused }
-                .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
+                .background(Color(0xFF17191F), RoundedCornerShape(10.dp))
                 .border(
                     2.dp,
-                    if (infocato) LocalAccento.current else Color(0xFF262B33),
+                    if (infocato) LocalAccento.current else Color(0xFF1E2027),
                     RoundedCornerShape(10.dp)
                 )
                 .padding(horizontal = 18.dp, vertical = 14.dp),

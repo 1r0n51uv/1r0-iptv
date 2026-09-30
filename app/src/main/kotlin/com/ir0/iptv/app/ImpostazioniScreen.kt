@@ -50,7 +50,7 @@ fun ImpostazioniScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
+            .background(Color(0xFF0A0B0E))
             .verticalScroll(rememberScrollState())
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
@@ -162,7 +162,7 @@ private fun RegistroAppSezione() {
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1A1D22), RoundedCornerShape(8.dp))
+                    .background(Color(0xFF131519), RoundedCornerShape(8.dp))
                     .padding(16.dp)
             )
         } else {
@@ -182,7 +182,7 @@ private fun PulsanteRegistro(testo: String, onClick: () -> Unit) {
         modifier = Modifier
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
-            .background(Color(0xFF262B33), RoundedCornerShape(8.dp))
+            .background(Color(0xFF1E2027), RoundedCornerShape(8.dp))
             .border(
                 2.dp,
                 if (infocato) LocalAccento.current else Color.Transparent,
@@ -212,7 +212,7 @@ private fun PastigliaColore(accento: Accento, scelto: Boolean, onClick: () -> Un
         modifier = Modifier
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (scelto) Color(0xFF262B33) else Color(0xFF1A1D22), RoundedCornerShape(8.dp))
+            .background(if (scelto) Color(0xFF1E2027) else Color(0xFF131519), RoundedCornerShape(8.dp))
             .border(
                 2.dp,
                 if (infocata) Color(0xFFF2F2F0) else Color.Transparent,
@@ -249,7 +249,7 @@ private fun RigaOrdinamento(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .width(420.dp)
-            .background(Color(0xFF1A1D22), RoundedCornerShape(8.dp))
+            .background(Color(0xFF131519), RoundedCornerShape(8.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Text(
@@ -271,7 +271,7 @@ private fun PulsanteFreccia(icona: ImageVector, abilitato: Boolean, onClick: () 
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF262B33))
+            .background(Color(0xFF1E2027))
             .then(
                 if (infocato && abilitato) {
                     Modifier.border(2.dp, LocalAccento.current, RoundedCornerShape(8.dp))
@@ -286,7 +286,7 @@ private fun PulsanteFreccia(icona: ImageVector, abilitato: Boolean, onClick: () 
         Icon(
             imageVector = icona,
             contentDescription = null,
-            tint = if (abilitato) Color(0xFF9AA0AA) else Color(0xFF3A3F48)
+            tint = if (abilitato) Color(0xFF9AA0AA) else Color(0xFF34373F)
         )
     }
 }
@@ -304,13 +304,13 @@ private fun Interruttore(acceso: Boolean, testo: String, onClick: () -> Unit) {
     var infocato by remember { mutableStateOf(false) }
     Text(
         text = testo,
-        color = if (acceso) Color(0xFF14161A) else Color(0xFFC7CAD0),
+        color = if (acceso) Color(0xFF0A0B0E) else Color(0xFFC7CAD0),
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .onFocusChanged { infocato = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (acceso) LocalAccento.current else Color(0xFF262B33), RoundedCornerShape(8.dp))
+            .background(if (acceso) LocalAccento.current else Color(0xFF1E2027), RoundedCornerShape(8.dp))
             .border(
                 2.dp,
                 if (infocato) Color(0xFFF2F2F0) else Color.Transparent,

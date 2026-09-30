@@ -481,8 +481,8 @@ private fun BarraControlli(
 
 @Composable
 private fun PulsanteProssimoEpisodio(evidenziato: Boolean) {
-    val sfondo = if (evidenziato) LocalAccento.current else Color(0xFF262B33)
-    val colore = if (evidenziato) Color(0xFF14161A) else Color(0xFFF2F2F0)
+    val sfondo = if (evidenziato) LocalAccento.current else Color(0xFF1E2027)
+    val colore = if (evidenziato) Color(0xFF0A0B0E) else Color(0xFFF2F2F0)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier

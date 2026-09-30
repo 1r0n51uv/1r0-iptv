@@ -1,5 +1,26 @@
 package com.ir0.iptv.app
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import com.ir0.iptv.app.navigation.LARGHEZZA_SIDEBAR
+import com.ir0.iptv.app.theme.Palette
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -176,13 +197,19 @@ fun DashboardScreen(
         }
     }
 
+    // Il contenuto "in evidenza" guida lo sfondo a tutto schermo: l'hero all'apertura, poi la card
+    // che ha il focus mentre si scorre tra le righe.
+    var inEvidenza by remember(hero?.chiaveIdentita) { mutableStateOf(hero) }
+    val focalizza: (ContentCard) -> Unit = { inEvidenza = it }
+
+    Box(modifier = Modifier.fillMaxSize().background(Palette.inchiostro)) {
+    SfondoAmbientale(inEvidenza = inEvidenza)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
             .verticalScroll(statoColonna)
-            .padding(vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+            .padding(top = if (hero == null) 32.dp else 0.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
         if (hero != null) {
             HeroContinua(
@@ -198,6 +225,7 @@ fun DashboardScreen(
                 // qualche frame: il bring-into-view del focus vorrebbe mostrare solo il pulsante
                 // (in basso nell'hero) e altrimenti avrebbe l'ultima parola.
                 onFocalizzato = {
+                    inEvidenza = hero
                     scope.launch { repeat(4) { withFrameNanos {}; statoColonna.scrollTo(0) } }
                 },
                 // "Riprendi" (Continua a guardare) parte subito; per qualunque altro hero (Serie
@@ -206,12 +234,15 @@ fun DashboardScreen(
                 onClick = { if (heroDaRiprendere) onRiprendiClick(hero) else onContenutoClick(hero) }
             )
         }
-        ordine.forEach { sezione ->
+        ordine.forEachIndexed { indice, sezione ->
+          // Le righe entrano una dopo l'altra (solo disegno: sono focalizzabili da subito).
+          Box(modifier = Modifier.entrataScaglionata(indice)) {
             if (sezione == SezioneHome.SPORT) {
                 FasciaSport(partite = sport, onCanaleClick = onContenutoClick)
             } else {
                 val tipo = tipoRigaDi(sezione)!!
                 RigaContenuti(
+                    onFocalizzata = focalizza,
                     titolo = sezione.etichetta,
                     contenuti = contenutiRigaVisibili(tipo),
                     visti = visti,
@@ -226,8 +257,118 @@ fun DashboardScreen(
                     messaggioVuoto = if (tipo == TipoRiga.CONTINUA && heroDaRiprendere) null else messaggioVuotoDi(tipo)
                 )
             }
+          }
         }
     }
+    }
+}
+
+/**
+ * Sfondo a tutto schermo della Home, dietro hero e righe: la locandina del contenuto in evidenza,
+ * allargata a destra e sfumata verso sinistra e verso il basso, con un lento zoom continuo.
+ *
+ * - Cambia solo dopo che il focus si e' fermato ~300ms su una card: scorrendo veloce una riga non
+ *   si caricano (ne' si dissolvono) dieci immagini di fila.
+ * - I Canali non lo cambiano: un logo ingrandito a tutto schermo e' solo una macchia.
+ * - La locandina e' leggermente sfocata: e' pensata per una card, ingrandita a questa scala
+ *   sarebbe comunque sgranata; sfocata diventa "atmosfera" e non distrae dal testo sopra.
+ * - Si estende anche sotto la Sidebar (che e' semitrasparente), per un'immagine davvero a bordo
+ *   schermo.
+ */
+@Composable
+private fun SfondoAmbientale(inEvidenza: ContentCard?) {
+    var immagine by remember { mutableStateOf(inEvidenza?.takeUnless { it is ContentCard.Canale }?.imageUrl) }
+    val corrente by rememberUpdatedState(inEvidenza)
+    LaunchedEffect(Unit) {
+        snapshotFlow { corrente }
+            .collectLatest { card ->
+                val url = card?.takeUnless { it is ContentCard.Canale }?.imageUrl ?: return@collectLatest
+                delay(300)
+                immagine = url
+            }
+    }
+    val zoomLento = rememberInfiniteTransition(label = "kenBurns")
+    val scala by zoomLento.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 22_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "kenBurnsScala"
+    )
+    val context = LocalContext.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .estendiASinistra(LARGHEZZA_SIDEBAR)
+    ) {
+        Crossfade(
+            targetState = immagine,
+            animationSpec = tween(durationMillis = 900, easing = EasingCinema),
+            modifier = Modifier.fillMaxSize(),
+            label = "sfondoAmbientale"
+        ) { url ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (url != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(url)
+                            .transformations(DownsampleBlurTransformation(targetWidth = 480, radius = 2, passes = 1))
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .fillMaxWidth(0.74f)
+                            .fillMaxHeight(0.82f)
+                            .sfumaBordiScenografia()
+                            .graphicsLayer {
+                                scaleX = scala
+                                scaleY = scala
+                                transformOrigin = TransformOrigin(0.7f, 0.3f)
+                            }
+                    )
+                }
+            }
+        }
+        // Sfumatura da sinistra: il testo dell'hero e le icone della Sidebar restano leggibili.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Palette.inchiostro,
+                        0.28f to Palette.inchiostro.copy(alpha = 0.92f),
+                        0.55f to Palette.inchiostro.copy(alpha = 0.45f),
+                        1f to Palette.inchiostro.copy(alpha = 0.15f)
+                    )
+                )
+        )
+        // Sfumatura dal basso: le righe poggiano su un fondo pieno, non sull'immagine.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Palette.inchiostro.copy(alpha = 0.35f),
+                        0.18f to Color.Transparent,
+                        0.5f to Palette.inchiostro.copy(alpha = 0.55f),
+                        0.78f to Palette.inchiostro.copy(alpha = 0.96f),
+                        1f to Palette.inchiostro
+                    )
+                )
+        )
+    }
+}
+
+/** Misura il contenuto [extra] piu' largo e lo sposta a sinistra della stessa quantita', lasciando
+ * invariata la dimensione dichiarata al genitore: serve a far passare lo sfondo sotto la Sidebar. */
+private fun Modifier.estendiASinistra(extra: Dp): Modifier = layout { misurabile, vincoli ->
+    val px = extra.roundToPx()
+    val larghezza = vincoli.maxWidth + px
+    val piazzabile = misurabile.measure(vincoli.copy(minWidth = larghezza, maxWidth = larghezza))
+    layout(vincoli.maxWidth, piazzabile.height) { piazzabile.place(-px, 0) }
 }
 
 private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
@@ -238,12 +379,12 @@ private fun tipoRigaDi(sezione: SezioneHome): TipoRiga? = when (sezione) {
     SezioneHome.PREFERITI -> TipoRiga.PREFERITI
 }
 
-private val ALTEZZA_HERO = 340.dp
+private val ALTEZZA_HERO = 400.dp
 
-/** La banda in evidenza con il contenuto da riprendere: sfondo della locandina sfocato, titolo e
- * pulsante Riprendi in basso a sinistra, come nella Home precedente al refactor con Sidebar.
- * Il focus (e quindi il D-pad all'avvio) va sul pulsante, non sull'intera banda: cosi' premere
- * OK riproduce subito, senza dover indovinare dove sia l'area cliccabile. */
+/** La banda in evidenza con il contenuto da riprendere, a tutta larghezza sopra lo sfondo
+ * ambientale (vedi [SfondoAmbientale]): titolo grande e pulsante in basso a sinistra, la locandina
+ * nitida a destra. Il focus (e quindi il D-pad all'avvio) va sul pulsante, non sull'intera banda:
+ * cosi' premere OK riproduce subito, senza dover indovinare dove sia l'area cliccabile. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun HeroContinua(
@@ -266,10 +407,10 @@ private fun HeroContinua(
     val context = LocalContext.current
     val accento = LocalAccento.current
     val etichetta = when {
-        daRiprendere -> "CONTINUA A GUARDARE"
-        card is ContentCard.SerieCard -> "SERIE"
-        card is ContentCard.Canale -> "CANALE"
-        else -> "FILM"
+        daRiprendere -> "Continua a guardare"
+        card is ContentCard.SerieCard -> "Serie"
+        card is ContentCard.Canale -> "Canale"
+        else -> "Film"
     }
     val etichettaPulsante = when {
         caricando -> "Caricamento…"
@@ -278,101 +419,121 @@ private fun HeroContinua(
         else -> "Riproduci"
     }
 
+    // Entrata dell'hero: il testo sale e compare, la locandina scivola da destra poco dopo.
+    val entrata = remember(card.chiaveIdentita) { Animatable(0f) }
+    LaunchedEffect(card.chiaveIdentita) {
+        entrata.animateTo(1f, tween(durationMillis = 900, easing = EasingCinema))
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(ALTEZZA_HERO)
-            .padding(horizontal = 32.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF262B33))
-            .border(
-                2.dp,
-                if (pulsanteInfocato) accento else Color.Transparent,
-                RoundedCornerShape(14.dp)
-            )
     ) {
         val imageUrl = card.imageUrl
         if (imageUrl != null) {
+            val verticale = card !is ContentCard.Canale
             AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(imageUrl)
-                    .transformations(DownsampleBlurTransformation())
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            PlaceholderLocandina(card, modifier = Modifier.fillMaxSize())
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0x9914161A), Color(0xE614161A)),
-                        startY = 0f
-                    )
-                )
-        )
-        if (preferito) {
-            Box(
+                model = ImageRequest.Builder(context).data(imageUrl).crossfade(400).build(),
+                contentDescription = card.title,
+                contentScale = if (verticale) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x99000000)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Favorite,
-                    contentDescription = "Preferito",
-                    tint = accento,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 72.dp, top = 24.dp)
+                    .height(if (verticale) 300.dp else 180.dp)
+                    .aspectRatio(if (verticale) 2f / 3f else 16f / 9f)
+                    .graphicsLayer {
+                        alpha = entrata.value
+                        translationX = (1f - entrata.value) * 60.dp.toPx()
+                    }
+                    .shadow(elevation = 32.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Palette.superficieAlta)
+            )
         }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(start = 32.dp, bottom = 8.dp)
+                .width(560.dp)
+                .graphicsLayer {
+                    alpha = entrata.value
+                    translationY = (1f - entrata.value) * 24.dp.toPx()
+                },
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = etichetta,
-                color = accento,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(14.dp)
+                        .background(accento)
+                )
+                Text(
+                    text = etichetta.uppercase(),
+                    color = Palette.testoSecondario,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 2.sp
+                )
+                if (preferito) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = "Preferito",
+                        tint = accento,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
             Text(
                 text = card.title,
-                color = Color(0xFFF2F2F0),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Black,
+                color = Palette.testo,
+                fontSize = 46.sp,
+                lineHeight = 48.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-1).sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             if (percentuale > 0) {
-                Box(
-                    modifier = Modifier
-                        .width(240.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x333A3F48))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(percentuale / 100f)
-                            .fillMaxHeight()
-                            .background(accento)
+                            .width(220.dp)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(Palette.testo.copy(alpha = 0.22f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(percentuale / 100f)
+                                .fillMaxHeight()
+                                .background(accento)
+                        )
+                    }
+                    Text(
+                        text = "$percentuale% visto",
+                        color = Palette.testoSecondario,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
+            val fondoPulsante by animateColorAsState(
+                targetValue = if (pulsanteInfocato) Palette.testo else Palette.testo.copy(alpha = 0.16f),
+                animationSpec = tween(durationMillis = 180),
+                label = "fondoRiprendi"
+            )
+            val colorePulsante = if (pulsanteInfocato) Palette.inchiostro else Palette.testo
             Row(
                 modifier = Modifier
-                    .padding(top = 6.dp)
+                    .padding(top = 8.dp)
                     .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                     // GIU' va sempre sulla prima card sotto quando esiste, invece di lasciare che
                     // la ricerca 2D di default (da un elemento largo come l'hero dentro una Column
@@ -386,33 +547,29 @@ private fun HeroContinua(
                         pulsanteInfocato = it.isFocused
                         if (it.isFocused) onFocalizzato()
                     }
-                    .clip(RoundedCornerShape(8.dp))
+                    .zoomInFocus(pulsanteInfocato, RoundedCornerShape(10.dp), scalaMax = 1.06f, ombraMax = 16.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable(enabled = !caricando, onClick = onClick)
-                    .background(accento)
-                    .border(
-                        2.dp,
-                        if (pulsanteInfocato) Color(0xFFF2F2F0) else Color.Transparent,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                    .background(fondoPulsante)
+                    .padding(horizontal = 26.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (caricando) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = Color(0xFF14161A),
+                        modifier = Modifier.size(18.dp),
+                        color = colorePulsante,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null,
-                        tint = Color(0xFF14161A),
-                        modifier = Modifier.size(18.dp)
+                        tint = colorePulsante,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-                Text(text = etichettaPulsante, color = Color(0xFF14161A), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(text = etichettaPulsante, color = colorePulsante, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -434,21 +591,17 @@ fun RigaContenuti(
     /** Quando non null, la riga resta visibile (con questo messaggio) anche a contenuti vuoti;
      * quando null, una riga vuota semplicemente non compare (comportamento delle righe di
      * catalogo su Sfoglia/Cerca/Sport, dove una sezione vuota non aggiunge nulla da leggere). */
-    messaggioVuoto: String? = null
+    messaggioVuoto: String? = null,
+    /** Chiamato quando una card della riga prende il focus (la Home ci cambia lo sfondo). */
+    onFocalizzata: (ContentCard) -> Unit = {}
 ) {
     if (contenuti.isEmpty()) {
         if (messaggioVuoto == null) return
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = titolo,
-                color = Color(0xFFF2F2F0),
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
+            TitoloRiga(titolo)
             Text(
                 text = messaggioVuoto,
-                color = Color(0xFF6D7380),
+                color = Palette.testoTerziario,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 32.dp)
             )
@@ -463,14 +616,8 @@ fun RigaContenuti(
         if (indiceDaFocalizzare > 0) statoRiga.scrollToItem(indiceDaFocalizzare)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(
-            text = titolo,
-            color = Color(0xFFF2F2F0),
-            fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        TitoloRiga(titolo)
         LazyRow(
             state = statoRiga,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -486,7 +633,8 @@ fun RigaContenuti(
                     focusRequester = focusRequester.takeIf { card.chiaveIdentita == chiaveDaFocalizzare },
                     focusRequesterAggiuntivo = focusRequesterPrimoElemento.takeIf { indice == 0 },
                     onClick = { onClick(card) },
-                    onLongClick = { onLongClick(card) }
+                    onLongClick = { onLongClick(card) },
+                    onFocalizzata = { onFocalizzata(card) }
                 )
             }
         }
@@ -494,14 +642,52 @@ fun RigaContenuti(
 }
 
 @Composable
+private fun TitoloRiga(titolo: String) {
+    Text(
+        text = titolo,
+        color = Palette.testo,
+        fontSize = 21.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp,
+        modifier = Modifier.padding(horizontal = 32.dp)
+    )
+}
+
+/** Stato vuoto composto: un titolo che dice cosa succede e il messaggio operativo sotto, invece
+ * di una riga di testo grigio sperduta in un angolo. */
+@Composable
 fun SchermataVuota(messaggio: String) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
-            .padding(32.dp)
+            .background(
+                Brush.radialGradient(
+                    listOf(Palette.superficieAlta, Palette.inchiostro),
+                    radius = 1400f
+                )
+            )
+            .padding(48.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Text(text = messaggio, color = Color(0xFF9AA0AA), fontSize = 16.sp)
+        Column(
+            modifier = Modifier.width(620.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(4.dp)
+                    .background(LocalAccento.current)
+            )
+            Text(
+                text = "Niente da mostrare, per ora",
+                color = Palette.testo,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.5).sp
+            )
+            Text(text = messaggio, color = Palette.testoSecondario, fontSize = 17.sp, lineHeight = 25.sp)
+        }
     }
 }
 

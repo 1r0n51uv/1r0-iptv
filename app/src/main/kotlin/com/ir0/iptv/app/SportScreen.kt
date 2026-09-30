@@ -40,7 +40,7 @@ fun SportScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A)),
+            .background(Color(0xFF0A0B0E)),
         contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {

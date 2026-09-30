@@ -43,7 +43,7 @@ fun ConnessioneScreen(indirizzo: String?) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
+            .background(Color(0xFF0A0B0E))
             .padding(48.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -87,8 +87,8 @@ fun ConnessioneScreen(indirizzo: String?) {
                 Column(
                     modifier = Modifier
                         .padding(top = 8.dp)
-                        .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
-                        .border(1.dp, Color(0xFF262B33), RoundedCornerShape(10.dp))
+                        .background(Color(0xFF17191F), RoundedCornerShape(10.dp))
+                        .border(1.dp, Color(0xFF1E2027), RoundedCornerShape(10.dp))
                         .padding(horizontal = 20.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {

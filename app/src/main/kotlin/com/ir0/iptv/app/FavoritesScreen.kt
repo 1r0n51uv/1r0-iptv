@@ -31,7 +31,7 @@ fun FavoritesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF14161A))
+            .background(Color(0xFF0A0B0E))
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {

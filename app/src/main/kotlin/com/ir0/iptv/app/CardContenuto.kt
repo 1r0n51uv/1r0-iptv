@@ -34,14 +34,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.ir0.iptv.app.theme.LocalAccento
+import com.ir0.iptv.app.theme.Palette
+import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import com.ir0.iptv.domain.catalog.ContentCard
 
@@ -64,7 +69,9 @@ fun CardContenuto(
      * serve al ripristino del focus sulla card aperta l'ultima volta. */
     focusRequesterAggiuntivo: FocusRequester? = null,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    /** Chiamato quando la card prende il focus: la Home lo usa per cambiare lo sfondo. */
+    onFocalizzata: () -> Unit = {}
 ) {
     var infocata by remember { mutableStateOf(false) }
     val larghezza = if (card.locandinaVerticale) LARGHEZZA_CARD_VERTICALE else LARGHEZZA_CARD_ORIZZONTALE
@@ -88,6 +95,11 @@ fun CardContenuto(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val forma = RoundedCornerShape(8.dp)
+        val anello by animateFloatAsState(
+            targetValue = if (infocata) 1f else 0f,
+            animationSpec = tween(durationMillis = 180),
+            label = "anelloCard"
+        )
         Box(
             // Contenitore a dimensione fissa: e' questo il bersaglio del focus e del
             // "bring into view" del contenitore a scorrimento. Lo zoom NON va messo qui: la
@@ -99,7 +111,10 @@ fun CardContenuto(
                 .height(altezza)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .let { if (focusRequesterAggiuntivo != null) it.focusRequester(focusRequesterAggiuntivo) else it }
-                .onFocusChanged { infocata = it.isFocused }
+                .onFocusChanged {
+                    infocata = it.isFocused
+                    if (it.isFocused) onFocalizzata()
+                }
                 .pressabile(onClick = onClick, onLongClick = onLongClick)
         ) {
           Box(
@@ -107,22 +122,42 @@ fun CardContenuto(
                 .fillMaxSize()
                 // Ancorata in basso: la card in focus cresce solo verso l'alto, la linea di base
                 // della riga (bordo inferiore + titolo sotto) non si sposta scorrendo tra le card.
-                .zoomInFocus(infocata, forma, origine = TransformOrigin(0.5f, 1f))
+                // 1.08 e non di piu': oltre, la crescita supera i 20dp di contentPadding verticale
+                // delle righe e la card si taglia in alto.
+                .zoomInFocus(infocata, forma, scalaMax = 1.08f, ombraMax = 28.dp, origine = TransformOrigin(0.5f, 1f))
                 .clip(forma)
-                .background(Color(0xFF262B33))
-                .border(
-                    2.dp,
-                    if (infocata) LocalAccento.current else Color.Transparent,
-                    forma
-                )
+                .background(Palette.superficieAlta)
+                // Anello chiaro a fuoco (non l'accento): si legge su qualunque locandina.
+                .border(2.5.dp, Palette.testo.copy(alpha = anello), forma)
         ) {
             val imageUrl = card.imageUrl
             if (imageUrl != null) {
                 AsyncImage(
-                    model = imageUrl,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(320)
+                        .build(),
                     contentDescription = card.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
+                )
+                // Velo in basso: stacca la barra di avanzamento e il cuore dalla locandina, e a
+                // fuoco si schiarisce per far "accendere" la card.
+                val velo by animateFloatAsState(
+                    targetValue = if (infocata) 0f else 0.28f,
+                    animationSpec = tween(durationMillis = 220),
+                    label = "veloCard"
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.55f to Color.Transparent,
+                                1f to Palette.inchiostro.copy(alpha = 0.75f)
+                            )
+                        )
+                        .background(Palette.inchiostro.copy(alpha = velo))
                 )
             } else {
                 PlaceholderLocandina(card, modifier = Modifier.fillMaxSize())
@@ -134,7 +169,7 @@ fun CardContenuto(
                         .padding(6.dp)
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(Color(0x99000000)),
+                        .background(Palette.inchiostro.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -151,9 +186,9 @@ fun CardContenuto(
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
                         .padding(8.dp)
-                        .height(4.dp)
+                        .height(3.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF3A3F48))
+                        .background(Palette.testo.copy(alpha = 0.25f))
                 ) {
                     Box(
                         modifier = Modifier
@@ -167,8 +202,9 @@ fun CardContenuto(
         }
         Text(
             text = card.title,
-            color = if (infocata) LocalAccento.current else Color(0xFFF2F2F0),
+            color = if (infocata) Palette.testo else Palette.testoSecondario,
             fontSize = 14.sp,
+            fontWeight = if (infocata) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = if (card.locandinaVerticale) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
@@ -176,8 +212,9 @@ fun CardContenuto(
     }
 }
 
-/** Riempie il posto della locandina quando un contenuto non ha (ancora) un'immagine: un'icona
- * neutra sul fondo della card, cosi' la card non resta un rettangolo vuoto. */
+/** Riempie il posto della locandina quando un contenuto non ha (ancora) un'immagine: un fondo
+ * sfumato con il titolo in grande (come le tessere "senza artwork" delle app di streaming), cosi'
+ * un Canale senza logo si riconosce comunque a colpo d'occhio. */
 @Composable
 fun PlaceholderLocandina(card: ContentCard, modifier: Modifier = Modifier) {
     val icona = when (card) {
@@ -185,12 +222,31 @@ fun PlaceholderLocandina(card: ContentCard, modifier: Modifier = Modifier) {
         is ContentCard.Film -> Icons.Filled.Movie
         is ContentCard.SerieCard -> Icons.Filled.LiveTv
     }
-    Box(modifier = modifier.background(Color(0xFF262B33)), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier.background(
+            Brush.linearGradient(listOf(Palette.superficieAlta, Palette.superficie, Palette.inchiostro))
+        )
+    ) {
         Icon(
             imageVector = icona,
             contentDescription = null,
-            tint = Color(0xFF4A505C),
-            modifier = Modifier.size(44.dp)
+            tint = Palette.testoTerziario,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(10.dp)
+                .size(18.dp)
+        )
+        Text(
+            text = card.title,
+            color = Palette.testo.copy(alpha = 0.85f),
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 19.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(12.dp)
         )
     }
 }

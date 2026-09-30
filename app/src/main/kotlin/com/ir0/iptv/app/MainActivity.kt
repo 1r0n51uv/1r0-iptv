@@ -72,6 +72,10 @@ import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.app.sport.SportInEvidenza
 import com.ir0.iptv.app.theme.Accento
 import com.ir0.iptv.app.theme.LocalAccento
+import com.ir0.iptv.app.theme.TemaIptv
+import com.ir0.iptv.app.theme.Palette
+import com.ir0.iptv.app.navigation.LARGHEZZA_SIDEBAR
+import androidx.compose.ui.zIndex
 import com.ir0.iptv.app.webpanel.EsitoSorgente
 import com.ir0.iptv.app.webpanel.PonteTv
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
@@ -136,6 +140,7 @@ class MainActivity : ComponentActivity() {
         val suggerimentiAi = SuggerimentiAi()
         val sportInEvidenza = SportInEvidenza()
         setContent {
+          TemaIptv(accento = LocalAccento.current) {
             // Nessun BackHandler qui: durante l'avvio o il caricamento del catalogo non c'e'
             // nessuna schermata da cui "tornare indietro", quindi Back deve comportarsi come da
             // default di Android e lasciare che il sistema mostri il suo dialogo "Uscire
@@ -172,6 +177,7 @@ class MainActivity : ComponentActivity() {
                     sportInEvidenza = sportInEvidenza
                 )
             }
+          }
         }
     }
 
@@ -488,8 +494,11 @@ private fun ContentScreen(
 
     val focusSidebarSezione = remember { FocusRequester() }
     CompositionLocalProvider(LocalAccento provides Accento.daNome(impostazioni.accento).colore) {
-        Row(modifier = Modifier.fillMaxSize().background(Color(0xFF14161A))) {
+        // Box, non piu' Row: la Sidebar sta sopra i contenuti (zIndex) e si allarga con le
+        // etichette quando ha il focus, senza rimpaginare la schermata sotto.
+        Box(modifier = Modifier.fillMaxSize().background(Palette.inchiostro)) {
             Sidebar(
+                modifier = Modifier.zIndex(1f),
                 selezionata = destinazione,
                 onSeleziona = {
                     destinazione = it
@@ -506,6 +515,8 @@ private fun ContentScreen(
                 // focus non esce sui contenuti stessi.
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(start = LARGHEZZA_SIDEBAR)
+                    .ingressoSchermata(chiave = sopra ?: destinazione)
                     .focusProperties {
                         exit = { direzione ->
                             if (direzione == FocusDirection.Left) focusSidebarSezione
@@ -687,8 +698,8 @@ private fun DialogoUscita(onConferma: () -> Unit, onAnnulla: () -> Unit) {
             modifier = Modifier
                 .width(360.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1F232A))
-                .border(1.dp, Color(0xFF2E343E), RoundedCornerShape(14.dp))
+                .background(Color(0xFF17191F))
+                .border(1.dp, Color(0xFF2A2D35), RoundedCornerShape(14.dp))
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -712,14 +723,14 @@ private fun PulsanteDialogo(testo: String, focusRequester: FocusRequester? = nul
     val accento = LocalAccento.current
     Text(
         text = testo,
-        color = if (infocato) Color(0xFF14161A) else Color(0xFFF2F2F0),
+        color = if (infocato) Color(0xFF0A0B0E) else Color(0xFFF2F2F0),
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { infocato = it.isFocused }
             .clip(RoundedCornerShape(8.dp))
-            .background(if (infocato) accento else Color(0xFF262B33))
+            .background(if (infocato) accento else Color(0xFF1E2027))
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp)
     )
@@ -782,11 +793,11 @@ private fun localWebPanelAddress(): String? {
 @Composable
 private fun OnboardingScreen(webPanelAddress: String?) {
     MaterialTheme {
-        Surface(color = Color(0xFF14161A)) {
+        Surface(color = Color(0xFF0A0B0E)) {
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF14161A))
+                    .background(Color(0xFF0A0B0E))
                     .padding(48.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -825,8 +836,8 @@ private fun OnboardingScreen(webPanelAddress: String?) {
                         Column(
                             modifier = Modifier
                                 .padding(top = 8.dp)
-                                .background(Color(0xFF1F232A), RoundedCornerShape(10.dp))
-                                .border(1.dp, Color(0xFF262B33), RoundedCornerShape(10.dp))
+                                .background(Color(0xFF17191F), RoundedCornerShape(10.dp))
+                                .border(1.dp, Color(0xFF1E2027), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 20.dp, vertical = 18.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {

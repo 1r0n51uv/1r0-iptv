@@ -249,8 +249,8 @@ private fun MenuRapido(
                 }
                 .width(380.dp)
                 .clip(forma)
-                .background(Color(0xFF1F232A))
-                .border(1.dp, Color(0xFF2E343E), forma)
+                .background(Color(0xFF17191F))
+                .border(1.dp, Color(0xFF2A2D35), forma)
         ) {
             // La cover del contenuto, sfocata, fa da sfondo al menu.
             if (cover != null) {
@@ -270,7 +270,7 @@ private fun MenuRapido(
                     .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xA61A1D23), Color(0xF21A1D23))
+                            listOf(Color(0xA6131519), Color(0xF2131519))
                         )
                     )
             )
@@ -307,7 +307,7 @@ private fun VoceMenu(
             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
             .onFocusChanged { infocata = it.isFocused }
             .clickable(onClick = onClick)
-            .background(if (infocata) Color(0xFF2E343E) else Color.Transparent)
+            .background(if (infocata) Color(0xFF2A2D35) else Color.Transparent)
             .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Icon(
