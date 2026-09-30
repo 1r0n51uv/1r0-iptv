@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,9 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -127,6 +129,33 @@ fun DashboardScreen(
     val statoColonna = rememberScrollState()
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
+    // Bersaglio esplicito di GIU' dal pulsante Riprendi: la ricerca 2D di default di Compose, da
+    // un elemento largo come l'hero dentro una Column scorrevole, a volte non trova la riga sotto
+    // (resta ferma sul pulsante) o salta altrove invece di scendere alla card piu' vicina — con
+    // un FocusRequester dedicato sulla prima card della prima riga non vuota non c'e' da indovinare.
+    val focusRequesterPrimaRiga = remember { FocusRequester() }
+    val primaSezioneConContenuto = remember(righe, ordine, hero) {
+        ordine.firstOrNull { sezione ->
+            sezione != SezioneHome.SPORT && contenutiRigaVisibili(tipoRigaDi(sezione)!!).isNotEmpty()
+        }
+    }
+    // Lo stesso contenuto (es. una Serie nei Preferiti) puo' comparire in piu' righe insieme
+    // all'hero: senza questo, ogni riga la cui card corrisponde a chiaveDaFocalizzare attaccava
+    // lo stesso FocusRequester condiviso, e Compose finiva per dare il focus alla card sbagliata
+    // (l'ultima composta) invece che all'hero — un salto silenzioso subito dopo l'apertura, prima
+    // di qualunque tasto premuto. Qui si decide UNA sola riga bersaglio, mai l'hero se gia' lui
+    // stesso corrisponde a chiaveDaFocalizzare.
+    val heroHaChiaveDaFocalizzare = hero != null && hero.chiaveIdentita == chiaveDaFocalizzare
+    val rigaConChiaveDaFocalizzare = remember(righe, ordine, hero, chiaveDaFocalizzare) {
+        if (heroHaChiaveDaFocalizzare || chiaveDaFocalizzare == null) {
+            null
+        } else {
+            ordine.firstOrNull { sezione ->
+                sezione != SezioneHome.SPORT &&
+                    contenutiRigaVisibili(tipoRigaDi(sezione)!!).any { it.chiaveIdentita == chiaveDaFocalizzare }
+            }
+        }
+    }
 
     LaunchedEffect(chiaveDaFocalizzare, righe, ordine, hero) {
         when {
@@ -163,6 +192,7 @@ fun DashboardScreen(
                 daRiprendere = heroDaRiprendere,
                 caricando = heroDaRiprendere && caricandoRipresa,
                 focusRequester = focusRequester.takeIf { hero.chiaveIdentita == chiaveDaFocalizzare },
+                focusRequesterGiu = focusRequesterPrimaRiga.takeIf { primaSezioneConContenuto != null },
                 // Risalendo col D-pad, quando il pulsante prende il focus si riporta la colonna
                 // in cima cosi' la banda "Continua a guardare" si vede tutta. Va rifatto per
                 // qualche frame: il bring-into-view del focus vorrebbe mostrare solo il pulsante
@@ -186,8 +216,9 @@ fun DashboardScreen(
                     contenuti = contenutiRigaVisibili(tipo),
                     visti = visti,
                     personalizzazioni = personalizzazioni,
-                    chiaveDaFocalizzare = chiaveDaFocalizzare,
+                    chiaveDaFocalizzare = chiaveDaFocalizzare.takeIf { sezione == rigaConChiaveDaFocalizzare },
                     focusRequester = focusRequester,
+                    focusRequesterPrimoElemento = focusRequesterPrimaRiga.takeIf { sezione == primaSezioneConContenuto },
                     onClick = onContenutoClick,
                     onLongClick = onContenutoLongClick,
                     // Quando l'hero e' il contenuto da riprendere copre gia' il messaggio di
@@ -213,6 +244,7 @@ private val ALTEZZA_HERO = 340.dp
  * pulsante Riprendi in basso a sinistra, come nella Home precedente al refactor con Sidebar.
  * Il focus (e quindi il D-pad all'avvio) va sul pulsante, non sull'intera banda: cosi' premere
  * OK riproduce subito, senza dover indovinare dove sia l'area cliccabile. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun HeroContinua(
     card: ContentCard,
@@ -220,6 +252,10 @@ private fun HeroContinua(
     preferito: Boolean,
     daRiprendere: Boolean,
     focusRequester: FocusRequester?,
+    /** Bersaglio esplicito di GIU' dal pulsante: null quando nessuna riga sotto ha contenuti (in
+     * quel caso GIU' non porta da nessuna parte, invece di far indovinare alla ricerca di focus
+     * di Compose). */
+    focusRequesterGiu: FocusRequester? = null,
     /** Vero mentre "Riprendi" attende il caricamento della Serie prima di poter partire: il
      * pulsante mostra uno spinner al posto dell'icona Play e non risponde al click. */
     caricando: Boolean = false,
@@ -338,6 +374,14 @@ private fun HeroContinua(
                 modifier = Modifier
                     .padding(top = 6.dp)
                     .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                    // GIU' va sempre sulla prima card sotto quando esiste, invece di lasciare che
+                    // la ricerca 2D di default (da un elemento largo come l'hero dentro una Column
+                    // scorrevole) non trovi nulla o salti a una card lontana. SINISTRA non va
+                    // toccata qui: Cancel bloccherebbe il movimento sul posto invece di lasciarlo
+                    // risalire all'exit gia' gestito in MainActivity (atterra sulla Sidebar).
+                    .focusProperties {
+                        down = focusRequesterGiu ?: FocusRequester.Cancel
+                    }
                     .onFocusChanged {
                         pulsanteInfocato = it.isFocused
                         if (it.isFocused) onFocalizzato()
@@ -381,6 +425,9 @@ fun RigaContenuti(
     visti: List<Visto>,
     chiaveDaFocalizzare: String?,
     focusRequester: FocusRequester?,
+    /** Bersaglio di GIU' dal pulsante Riprendi dell'hero: quando non null va sulla prima card di
+     * questa riga (solo la riga che l'hero ha scelto come prima con contenuti lo passa). */
+    focusRequesterPrimoElemento: FocusRequester? = null,
     onClick: (ContentCard) -> Unit,
     onLongClick: (ContentCard) -> Unit = {},
     personalizzazioni: Map<String, ContentCustomization> = emptyMap(),
@@ -431,12 +478,13 @@ fun RigaContenuti(
             // con lo zoom ancorato in basso la crescita e' tutta verso l'alto.
             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 20.dp)
         ) {
-            items(contenuti) { card ->
+            itemsIndexed(contenuti) { indice, card ->
                 CardContenuto(
                     card = card,
                     percentuale = registroVisti.percentuale(visti, card.chiaveIdentita),
                     preferito = elencoPreferiti.preferito(personalizzazioni, card),
                     focusRequester = focusRequester.takeIf { card.chiaveIdentita == chiaveDaFocalizzare },
+                    focusRequesterAggiuntivo = focusRequesterPrimoElemento.takeIf { indice == 0 },
                     onClick = { onClick(card) },
                     onLongClick = { onLongClick(card) }
                 )

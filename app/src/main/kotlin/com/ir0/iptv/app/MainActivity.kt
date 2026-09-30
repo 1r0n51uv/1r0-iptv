@@ -1,13 +1,17 @@
 package com.ir0.iptv.app
 
+import android.app.Activity
 import android.content.Context
 import android.os.Bundle
+import android.view.KeyEvent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
@@ -34,9 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.ir0.iptv.app.content.CatalogoRepository
 import com.ir0.iptv.app.content.ContentFetcher
 import com.ir0.iptv.app.content.DettaglioCache
@@ -64,6 +72,7 @@ import com.ir0.iptv.app.sport.PartitaConCanale
 import com.ir0.iptv.app.sport.SportInEvidenza
 import com.ir0.iptv.app.theme.Accento
 import com.ir0.iptv.app.theme.LocalAccento
+import com.ir0.iptv.app.webpanel.EsitoSorgente
 import com.ir0.iptv.app.webpanel.PonteTv
 import com.ir0.iptv.app.webpanel.QrCodeGenerator
 import com.ir0.iptv.app.webpanel.SorgenteRepository
@@ -127,18 +136,24 @@ class MainActivity : ComponentActivity() {
         val suggerimentiAi = SuggerimentiAi()
         val sportInEvidenza = SportInEvidenza()
         setContent {
-            // Back resta SEMPRE dentro l'app: si esce solo con HOME. Questo handler di base copre
-            // le fasi senza uno schermo di navigazione (primo avvio, caricamento del catalogo),
-            // dove altrimenti Back terminava l'Activity e la TV mostrava il suo "Uscire dall'app?".
-            // Sugli schermi di contenuto l'handler interno di ContentScreen, composto dopo, ha la
-            // precedenza e gestisce Dettaglio/player/ritorno alla Dashboard.
-            BackHandler { /* no-op */ }
-
+            // Nessun BackHandler qui: durante l'avvio o il caricamento del catalogo non c'e'
+            // nessuna schermata da cui "tornare indietro", quindi Back deve comportarsi come da
+            // default di Android e lasciare che il sistema mostri il suo dialogo "Uscire
+            // dall'app?" (prima veniva soppresso da un BackHandler no-op, e quel dialogo non
+            // compariva mai nemmeno a schermata vuota).
             var sorgenti by remember { mutableStateOf(sorgenteRepository.elenco()) }
+            // Il poll non si fermava piu' appena la lista non era vuota: modificare o sostituire
+            // la Sorgente dal Pannello Web (es. passare da un account Xtream rotto a un M3U
+            // valido) restava senza alcun effetto finche' l'app non veniva chiusa e riaperta -
+            // confermato sul dispositivo, la sincronizzazione ripeteva la vecchia Sorgente
+            // Xtream anche minuti dopo averla sostituita con una M3U funzionante. Qui il poll
+            // continua per tutta la vita dell'app; si aggiorna lo stato solo quando la lista e'
+            // davvero cambiata, per non ricomporre/risincronizzare ad ogni giro a vuoto.
             LaunchedEffect(Unit) {
-                while (sorgenti.isEmpty()) {
+                while (true) {
                     delay(SORGENTI_POLL_INTERVAL_MS)
-                    sorgenti = sorgenteRepository.elenco()
+                    val aggiornate = sorgenteRepository.elenco()
+                    if (aggiornate != sorgenti) sorgenti = aggiornate
                 }
             }
 
@@ -158,6 +173,24 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    // Race nota di Compose (non risolta lato libreria): un Modifier.focusProperties { exit = ... }
+    // che restituisce un FocusRequester condiviso (qui focusSidebarSezione, riassegnato ad
+    // un'icona diversa della Sidebar ad ogni cambio Destinazione) puo' arrivare a un tasto
+    // direzionale nel breve istante in cui non e' ancora attaccato a nessuna icona, facendo
+    // sollevare a Compose stesso IllegalStateException("FocusRequester is not initialized") fuori
+    // da qualunque nostro codice richiamabile - confermato da un crash reale raccolto sul
+    // dispositivo (dumpsys dropbox, data_app_crash) durante la navigazione col D-pad. Qui si
+    // ignora solo quella singola eccezione, consumando il tasto invece di far cadere l'app.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean = try {
+        super.dispatchKeyEvent(event)
+    } catch (e: IllegalStateException) {
+        // Solo questa race nota va ignorata: qualunque altra IllegalStateException risale
+        // normalmente, per non mascherare un bug diverso e reale.
+        if (e.message?.contains("FocusRequester is not initialized") != true) throw e
+        RegistroApp.errore("Focus", "Ignorato un tasto durante una race di focus di Compose", e)
+        true
     }
 }
 
@@ -200,9 +233,19 @@ private fun ContentScreen(
     var richiesteDiAggiornamento by remember(sorgenti) { mutableStateOf(0) }
     var inAggiornamento by remember(sorgenti) { mutableStateOf(false) }
     // Nome della Sorgente in corso e avanzamento (indice/totale): letti dalla schermata di
-    // caricamento del primissimo avvio e dall'icona "Aggiorna catalogo" in Sidebar.
+    // caricamento del primissimo avvio.
     var sorgenteInCorso by remember(sorgenti) { mutableStateOf<String?>(null) }
     var progressoSync by remember(sorgenti) { mutableStateOf<Pair<Int, Int>?>(null) }
+    // Da 0f a 1f, quanto e' avanzata la Sorgente in corso: riempie il bordo dell'icona "Aggiorna
+    // catalogo" in Sidebar (vedi ContentFetcher.onProgressoFrazionale).
+    var progressoFrazionale by remember(sorgenti) { mutableStateOf<Float?>(null) }
+    // Il Pannello Web puo' chiedere di forzare una sincronizzazione (bottone "Forza
+    // sincronizzazione" sulla pagina Sorgenti): ogni incremento del contatore vale come un tocco
+    // su "Aggiorna catalogo" in Sidebar, stesso effetto sia che arrivi dalla TV sia dal browser.
+    val richiestaSyncWeb by PonteTv.richiestaSincronizzazione.collectAsState()
+    LaunchedEffect(richiestaSyncWeb) {
+        if (richiestaSyncWeb > 0) richiesteDiAggiornamento++
+    }
     LaunchedEffect(sorgenti, richiesteDiAggiornamento) {
         // Al primo giro (nessun tocco su "Aggiorna catalogo") la sync automatica parte solo se
         // l'app era davvero chiusa: tornando dal background si resta sulla sola copia locale
@@ -211,18 +254,60 @@ private fun ContentScreen(
         inAggiornamento = true
         // Il catalogo vecchio resta a schermo durante un aggiornamento: azzerarlo
         // riporterebbe allo scheletro di caricamento ad ogni refresh.
-        val aggiornato = ContentFetcher().catalogo(sorgenti) { indice, totale, sorgente ->
-            sorgenteInCorso = sorgente.nome
-            progressoSync = indice to totale
+        val esiti = mutableListOf<EsitoSorgente>()
+        val aggiornato = ContentFetcher().catalogo(
+            sorgenti,
+            onProgresso = { indice, totale, sorgente ->
+                sorgenteInCorso = sorgente.nome
+                progressoSync = indice to totale
+                progressoFrazionale = 0f
+            },
+            onProgressoFrazionale = { frazione -> progressoFrazionale = frazione },
+            onEsito = { sorgente, errore ->
+                esiti += EsitoSorgente(sorgente.nome, System.currentTimeMillis(), errore)
+            }
+        )
+        val fallita = esiti.firstOrNull { it.erroreMessaggio != null }
+        // Una sincronizzazione fallita (Sorgente irraggiungibile) restituisce un catalogo vuoto:
+        // sovrascrivere con quello, come si faceva prima, cancellava un catalogo buono gia' a
+        // schermo (e su disco) per un problema di rete transitorio - confermato in campo, il
+        // provider di questo account e' andato giu' proprio durante una prova. Un fallimento non
+        // tocca ne' lo schermo ne' la copia locale quando c'e' gia' qualcosa di buono da tenere;
+        // al primissimo avvio (nessuna copia locale) si mostra comunque il risultato, vuoto o no,
+        // altrimenti la schermata di caricamento resterebbe bloccata per sempre.
+        val vecchioNonVuoto = catalogo?.isEmpty == false
+        if (aggiornato.isEmpty && fallita != null && vecchioNonVuoto) {
+            RegistroApp.errore(
+                "Sorgente",
+                "Sincronizzazione fallita e catalogo risultante vuoto: tenuta la copia precedente"
+            )
+        } else {
+            catalogo = aggiornato
+            catalogoScaricato = aggiornato
+            catalogoRepository.salva(aggiornato)
+            // Riaggancia Preferiti e Visti la cui Chiave non esiste piu' in questo catalogo (es.
+            // la Sorgente e' passata da un formato all'altro dello stesso provider - Fase 13),
+            // invece di lasciarli semplicemente spariti.
+            vistoRepository.riconcilia(aggiornato)
+            personalizzazioneRepository.riconcilia(aggiornato)
         }
-        catalogo = aggiornato
-        catalogoScaricato = aggiornato
-        catalogoRepository.salva(aggiornato)
+        PonteTv.pubblicaEsitiSincronizzazione(esiti)
+        // Prima di questo fix un fallimento di sincronizzazione era visibile solo nel Registro
+        // dell'app o nel Pannello Web: chi ha in mano solo il telecomando non lo vedeva mai. Un
+        // Toast basta: non serve un banner persistente per un evento che si puo' solo riprovare.
+        fallita?.let {
+            Toast.makeText(
+                context,
+                "Sincronizzazione fallita per '${it.nomeSorgente}': ${it.erroreMessaggio}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         // Una Serie in cache potrebbe avere nuovi Episodi arrivati proprio con questo refresh.
         DettaglioCache.pulisci()
         inAggiornamento = false
         sorgenteInCorso = null
         progressoSync = null
+        progressoFrazionale = null
     }
     val catalogoCorrente = catalogo
     if (catalogoCorrente == null) {
@@ -247,16 +332,23 @@ private fun ContentScreen(
     // Bumped dopo un'azione del menu rapido (es. Preferiti) per rileggere Visti e Personalizzazioni
     // senza dover cambiare schermata.
     var refreshDati by remember { mutableStateOf(0) }
-    // Back resta sempre dentro l'app: prima chiude le schermate aperte sopra (Dettaglio,
-    // player), poi riporta alla Dashboard da qualsiasi sezione della Sidebar, infine — sulla
-    // Dashboard, radice dell'app — non fa nulla. Lasciare che Back finisse l'Activity faceva
-    // ricomparire la schermata di caricamento del catalogo al rientro; si esce con HOME.
-    BackHandler {
-        when {
-            sovrapposte.isNotEmpty() -> sovrapposte = sovrapposte.dropLast(1)
-            destinazione != Destinazione.DASHBOARD -> destinazione = Destinazione.DASHBOARD
-            else -> Unit
+    // Back chiude prima le schermate aperte sopra (Dettaglio, player), poi riporta alla
+    // Dashboard da qualsiasi sezione della Sidebar. Sulla Dashboard, radice dell'app, non c'e'
+    // piu' nulla da chiudere: li' Back mostra un dialogo di conferma invece di uscire subito.
+    // Un tentativo precedente contava sul dialogo di sistema "Uscire dall'app?" che Android TV
+    // mostrerebbe di default lasciando che Back finisca l'Activity - verificato sul dispositivo
+    // reale (Xiaomi/Mediatek) che quel dialogo non esiste affatto su questa TV: Back finiva
+    // l'app in silenzio. Qui si mostra un dialogo nostro, cosi' non serve contare sul sistema.
+    var mostraDialogoUscita by remember { mutableStateOf(false) }
+    BackHandler(enabled = !mostraDialogoUscita && (sovrapposte.isNotEmpty() || destinazione != Destinazione.DASHBOARD)) {
+        if (sovrapposte.isNotEmpty()) {
+            sovrapposte = sovrapposte.dropLast(1)
+        } else {
+            destinazione = Destinazione.DASHBOARD
         }
+    }
+    BackHandler(enabled = !mostraDialogoUscita && sovrapposte.isEmpty() && destinazione == Destinazione.DASHBOARD) {
+        mostraDialogoUscita = true
     }
 
     // Rileggere ad ogni cambio di schermata tiene aggiornate le barre di avanzamento
@@ -405,7 +497,7 @@ private fun ContentScreen(
                 },
                 focusSezioneCorrente = focusSidebarSezione,
                 inAggiornamento = inAggiornamento,
-                progressoSync = progressoSync,
+                progressoFrazionale = progressoFrazionale,
                 onAggiorna = { richiesteDiAggiornamento++ }
             )
             Box(
@@ -571,27 +663,89 @@ private fun ContentScreen(
                         onChiudi = { cardMenu = null }
                     )
                 }
+
+                if (mostraDialogoUscita) {
+                    DialogoUscita(
+                        onConferma = { (context as? Activity)?.finish() },
+                        onAnnulla = { mostraDialogoUscita = false }
+                    )
+                }
             }
         }
     }
 }
 
+/** Chiesto da Back sulla Dashboard, radice dell'app (nessuna schermata sopra da chiudere): l'unico
+ * modo per uscire, visto che questa TV non mostra da sola nessun dialogo di sistema. Il focus di
+ * default va su "Annulla", cosi' un Back ripetuto per sbaglio non chiude l'app. */
+@Composable
+private fun DialogoUscita(onConferma: () -> Unit, onAnnulla: () -> Unit) {
+    val focusAnnulla = remember { FocusRequester() }
+    Dialog(onDismissRequest = onAnnulla) {
+        LaunchedEffect(Unit) { runCatching { focusAnnulla.requestFocus() } }
+        Column(
+            modifier = Modifier
+                .width(360.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF1F232A))
+                .border(1.dp, Color(0xFF2E343E), RoundedCornerShape(14.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Text(
+                text = "Uscire dall'app?",
+                color = Color(0xFFF2F2F0),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PulsanteDialogo(testo = "Annulla", focusRequester = focusAnnulla, onClick = onAnnulla)
+                PulsanteDialogo(testo = "Esci", onClick = onConferma)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PulsanteDialogo(testo: String, focusRequester: FocusRequester? = null, onClick: () -> Unit) {
+    var infocato by remember { mutableStateOf(false) }
+    val accento = LocalAccento.current
+    Text(
+        text = testo,
+        color = if (infocato) Color(0xFF14161A) else Color(0xFFF2F2F0),
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+            .onFocusChanged { infocato = it.isFocused }
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (infocato) accento else Color(0xFF262B33))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    )
+}
+
 /** La richiesta per il player interno/esterno a partire da una card giocabile (Canale o Film);
  * null per una Serie, che si riproduce dalla sua pagina di Dettaglio. */
 private fun richiestaDaCard(card: ContentCard): RichiestaRiproduzione? = when (card) {
-    is ContentCard.Canale ->
-        RichiestaRiproduzione(titolo = card.title, streamUrl = card.streamUrl, posterUrl = card.imageUrl)
+    is ContentCard.Canale -> RichiestaRiproduzione(
+        titolo = card.title,
+        streamUrl = card.streamUrl,
+        posterUrl = card.imageUrl,
+        chiaveIdentita = card.chiaveIdentita
+    )
     is ContentCard.Film -> RichiestaRiproduzione(
         titolo = card.title,
         streamUrl = card.streamUrl,
         tipo = TipoVisto.FILM,
-        posterUrl = card.imageUrl
+        posterUrl = card.imageUrl,
+        chiaveIdentita = card.chiaveIdentita
     )
     is ContentCard.SerieCard -> null
 }
 
 private fun ContentCard.Canale.toRichiesta() =
-    RichiestaRiproduzione(titolo = title, streamUrl = streamUrl, posterUrl = imageUrl)
+    RichiestaRiproduzione(titolo = title, streamUrl = streamUrl, posterUrl = imageUrl, chiaveIdentita = chiaveIdentita)
 
 /** La richiesta per un Episodio di una Serie gia' caricata, usata dal pulsante "Riprendi"
  * dell'hero in Dashboard (vedi [ContentScreen]/riprendiDaHero) — stessa costruzione della card
@@ -602,6 +756,7 @@ private fun richiestaDiEpisodio(episodio: Episodio, serie: Serie, immagineCard: 
         streamUrl = episodio.url,
         tipo = TipoVisto.EPISODIO,
         serie = serie.name,
+        chiaveIdentita = episodio.chiaveIdentita,
         posterUrl = episodio.immagine
             ?: navigazioneSerie.stagioneDi(serie, episodio)?.immagine
             ?: serie.poster

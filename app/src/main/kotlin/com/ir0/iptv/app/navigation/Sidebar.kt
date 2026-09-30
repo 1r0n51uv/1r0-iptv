@@ -2,6 +2,7 @@ package com.ir0.iptv.app.navigation
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -65,10 +66,11 @@ fun Sidebar(
      * SINISTRA dai contenuti) ci mette sopra il focus, invece che su quella piu' vicina. */
     focusSezioneCorrente: FocusRequester,
     inAggiornamento: Boolean = false,
-    /** Indice (0-based) e totale delle Sorgenti quando una sincronizzazione e' in corso: pilota
-     * l'anello di avanzamento sull'icona "Aggiorna catalogo". Null quando non ancora noto (es.
-     * prima che il fetch della prima Sorgente sia partito). */
-    progressoSync: Pair<Int, Int>? = null,
+    /** Da 0f a 1f, quanto e' avanzata la sincronizzazione in corso (vedi
+     * ContentFetcher.onProgressoFrazionale): riempie il bordo dell'icona "Aggiorna catalogo"
+     * invece di limitarsi a farla ruotare. Null quando non ancora noto (es. prima che il fetch
+     * sia partito davvero). */
+    progressoFrazionale: Float? = null,
     onAggiorna: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -92,7 +94,7 @@ fun Sidebar(
                 onClick = { onSeleziona(destinazione) }
             )
         }
-        RefreshButton(inAggiornamento = inAggiornamento, progressoSync = progressoSync, onClick = onAggiorna)
+        RefreshButton(inAggiornamento = inAggiornamento, progressoFrazionale = progressoFrazionale, onClick = onAggiorna)
     }
 }
 
@@ -160,7 +162,7 @@ private fun SidebarButton(
 @Composable
 private fun RefreshButton(
     inAggiornamento: Boolean,
-    progressoSync: Pair<Int, Int>? = null,
+    progressoFrazionale: Float? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -212,19 +214,24 @@ private fun RefreshButton(
             0f
         }
         val descrizione = when {
-            inAggiornamento && progressoSync != null ->
-                "Aggiornamento in corso: Sorgente ${progressoSync.first + 1} di ${progressoSync.second}"
+            inAggiornamento && progressoFrazionale != null ->
+                "Aggiornamento in corso: ${(progressoFrazionale * 100).toInt()}%"
             inAggiornamento -> "Aggiornamento in corso"
             else -> "Aggiorna catalogo"
         }
         Box(contentAlignment = Alignment.Center) {
             // Rotazione continua dell'icona sempre presente durante l'aggiornamento (segnale di
-            // vita anche prima che si sappia quante Sorgenti ci sono); l'anello sopra si aggiunge
-            // appena l'avanzamento e' noto, per mostrare quanto manca invece della sola attesa.
-            if (inAggiornamento && progressoSync != null) {
-                val (indice, totale) = progressoSync
+            // vita anche prima che si sappia l'avanzamento): l'anello sopra si aggiunge appena e'
+            // noto, riempiendosi via via invece di lasciare la sola attesa indefinita. Smussato
+            // con animateFloatAsState perche' l'avanzamento arriva a scatti (un aggiornamento per
+            // punto percentuale, vedi ContentFetcher.StreamConProgresso), non di continuo.
+            if (inAggiornamento && progressoFrazionale != null) {
+                val progressoAnimato by animateFloatAsState(
+                    targetValue = progressoFrazionale,
+                    label = "progressoAggiorna"
+                )
                 CircularProgressIndicator(
-                    progress = { if (totale > 0) (indice + 1) / totale.toFloat() else 0f },
+                    progress = { progressoAnimato },
                     modifier = Modifier.size(GLIFO_DIMENSIONE + 6.dp),
                     color = accento,
                     strokeWidth = 2.dp

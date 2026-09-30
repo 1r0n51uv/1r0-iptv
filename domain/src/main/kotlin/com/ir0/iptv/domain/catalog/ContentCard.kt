@@ -22,9 +22,20 @@ sealed interface ContentCard {
         val streamUrl: String,
         val categoria: String? = null,
         /** Presente solo per i Canali Xtream: e' l'unica Sorgente da cui si legge l'EPG. */
-        val xtream: RiferimentoXtream? = null
+        val xtream: RiferimentoXtream? = null,
+        /** `tvg-id` (M3U) / `epg_channel_id` (Xtream): un id assegnato dal provider stesso,
+         * indipendente sia dall'URL sia dal formato con cui e' stata configurata la Sorgente -
+         * l'unica Chiave che regge anche passando da un account Xtream a un M3U dello stesso
+         * provider (vedi Fase 13). */
+        val tvgId: String? = null
     ) : ContentCard {
-        override val chiaveIdentita: String get() = streamUrl
+        // In ordine di preferenza: il tvg-id/epg-id del provider (sopravvive a un cambio di
+        // formato Sorgente), poi l'id dello stream Xtream (sopravvive a una rotazione di
+        // host/credenziali, vedi ChiaveIdentitaXtream), infine l'URL grezzo se non c'e' nient'altro.
+        override val chiaveIdentita: String
+            get() = tvgId?.takeIf { it.isNotBlank() }
+                ?: xtream?.let { chiaveIdentitaXtream("live", it.streamId) }
+                ?: streamUrl
     }
 
     data class Film(
@@ -35,9 +46,15 @@ sealed interface ContentCard {
         val plot: String? = null,
         /** Presente solo per i Film Xtream: permette di caricare i dettagli estesi (cast,
          * regista, durata...) da get_vod_info. */
-        val xtream: RiferimentoXtream? = null
+        val xtream: RiferimentoXtream? = null,
+        /** Vedi [Canale.tvgId]: raro per un Film (niente EPG per i VOD) ma innocuo se il
+         * provider lo manda comunque. */
+        val tvgId: String? = null
     ) : ContentCard {
-        override val chiaveIdentita: String get() = streamUrl
+        override val chiaveIdentita: String
+            get() = tvgId?.takeIf { it.isNotBlank() }
+                ?: xtream?.let { chiaveIdentitaXtream("movie", it.streamId) }
+                ?: streamUrl
     }
 
     sealed interface SerieCard : ContentCard {

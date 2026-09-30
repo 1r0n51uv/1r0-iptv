@@ -17,6 +17,7 @@ class ElencoPreferiti {
         card: ContentCard
     ): Map<String, ContentCustomization> {
         val corrente = personalizzazioni[card.chiaveIdentita] ?: ContentCustomization()
-        return personalizzazioni + (card.chiaveIdentita to corrente.copy(favorite = !corrente.favorite))
+        val aggiornata = corrente.copy(favorite = !corrente.favorite, titolo = card.title)
+        return personalizzazioni + (card.chiaveIdentita to aggiornata)
     }
 }

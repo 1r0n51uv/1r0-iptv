@@ -54,13 +54,15 @@ private fun ContentCard.Canale.toJson(): JSONObject = JSONObject()
     .put("streamUrl", streamUrl)
     .put("categoria", categoria)
     .put("xtream", xtream?.toJson())
+    .put("tvgId", tvgId)
 
 private fun JSONObject.toCanale(): ContentCard.Canale = ContentCard.Canale(
     title = getString("title"),
     imageUrl = optStringOrNull("imageUrl"),
     streamUrl = getString("streamUrl"),
     categoria = optStringOrNull("categoria"),
-    xtream = optJSONObject("xtream")?.toRiferimentoXtream()
+    xtream = optJSONObject("xtream")?.toRiferimentoXtream(),
+    tvgId = optStringOrNull("tvgId")
 )
 
 private fun ContentCard.Film.toJson(): JSONObject = JSONObject()
@@ -70,6 +72,7 @@ private fun ContentCard.Film.toJson(): JSONObject = JSONObject()
     .put("categoria", categoria)
     .put("plot", plot)
     .put("xtream", xtream?.toJson())
+    .put("tvgId", tvgId)
 
 private fun JSONObject.toFilm(): ContentCard.Film = ContentCard.Film(
     title = getString("title"),
@@ -77,7 +80,8 @@ private fun JSONObject.toFilm(): ContentCard.Film = ContentCard.Film(
     streamUrl = getString("streamUrl"),
     categoria = optStringOrNull("categoria"),
     plot = optStringOrNull("plot"),
-    xtream = optJSONObject("xtream")?.toRiferimentoXtream()
+    xtream = optJSONObject("xtream")?.toRiferimentoXtream(),
+    tvgId = optStringOrNull("tvgId")
 )
 
 private fun ContentCard.SerieCard.toJson(): JSONObject = when (this) {
@@ -145,12 +149,14 @@ private fun Episodio.toJson(): JSONObject = JSONObject()
     .put("url", url)
     .put("episodeNumber", episodeNumber)
     .put("immagine", immagine)
+    .put("xtreamId", xtreamId)
 
 private fun JSONObject.toEpisodio(): Episodio = Episodio(
     title = getString("title"),
     url = getString("url"),
     episodeNumber = optIntOrNull("episodeNumber"),
-    immagine = optStringOrNull("immagine")
+    immagine = optStringOrNull("immagine"),
+    xtreamId = optIntOrNull("xtreamId")
 )
 
 private fun RiferimentoXtream.toJson(): JSONObject = JSONObject()

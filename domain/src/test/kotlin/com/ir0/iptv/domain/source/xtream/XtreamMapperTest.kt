@@ -90,6 +90,9 @@ class XtreamMapperTest {
             "http://iptv.provider.example:8080/series/user1/pass1/101.mp4",
             serie.seasons[0].episodes[0].url
         )
+        // L'id Xtream dell'Episodio va portato nel dominio: e' la Chiave di Identita' stabile
+        // (vedi ChiaveIdentitaXtream), a differenza dell'URL che incorpora host/credenziali.
+        assertEquals(101, serie.seasons[0].episodes[0].xtreamId)
     }
 
     @Test

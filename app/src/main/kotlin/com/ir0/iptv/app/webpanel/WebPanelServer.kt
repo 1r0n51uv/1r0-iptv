@@ -34,7 +34,11 @@ object WebPanelServer {
         embeddedServer(CIO, port = PORT, host = "0.0.0.0") {
             routing {
                 get("/") {
-                    call.respondText(sourcesPage(repository.elenco()), ContentType.Text.Html)
+                    val sincronizzato = call.request.queryParameters["sincronizzato"] != null
+                    call.respondText(
+                        sourcesPage(repository.elenco(), PonteTv.esitiSincronizzazione.value, sincronizzato),
+                        ContentType.Text.Html
+                    )
                 }
                 get("/sorgenti/nuova") {
                     call.respondText(sourceFormPage(), ContentType.Text.Html)
@@ -73,6 +77,10 @@ object WebPanelServer {
                 post("/sorgenti/{id}/elimina") {
                     repository.rimuovi(call.parameters["id"].orEmpty())
                     call.respondRedirect("/")
+                }
+                post("/sincronizza") {
+                    PonteTv.richiediSincronizzazione()
+                    call.respondRedirect("/?sincronizzato=1")
                 }
                 get("/impostazioni") {
                     call.respondText(
@@ -173,9 +181,12 @@ private fun pageShell(content: String): String = """
         table { border-collapse: collapse; }
         thead { display: none; }
         tbody tr { margin-bottom: 12px; border: 1px solid #e5e5e2; border-radius: 8px; overflow: hidden; background: #fff; }
-        td { padding: 10px 14px; border-bottom: 1px solid #eeeeeb; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: right; }
+        td { padding: 10px 14px; border-bottom: 1px solid #eeeeeb; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: right; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
         td:last-child { border-bottom: none; }
-        td::before { content: attr(data-label); font-weight: 600; color: #6b6b66; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; text-align: left; }
+        /* Un URL o un messaggio d'errore (senza spazi) non andrebbe a capo da solo dentro il
+           flex del td: senza "overflow-wrap" sopra sfondava la card verso destra su schermi
+           stretti invece di scendere su piu' righe; qui l'etichetta non si restringe mai. */
+        td::before { content: attr(data-label); font-weight: 600; color: #6b6b66; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; text-align: left; flex-shrink: 0; }
         .header { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #e5e5e2; background: #fff; }
         .brand { font-size: 15px; font-weight: 700; }
         .content { padding: 16px; max-width: 720px; margin: 0 auto; }
@@ -191,8 +202,12 @@ private fun pageShell(content: String): String = """
         .type-opt.active { border-color: #b45309; background: #fdf3ea; }
         .host-row { display: flex; flex-direction: column; gap: 0; }
         .error { background: #fee2e2; color: #991b1b; padding: 10px 14px; border-radius: 7px; margin-bottom: 16px; font-size: 13px; }
-        .actions { display: flex; gap: 8px; justify-content: flex-end; }
+        /* Su schermi stretti (telefono) una riga di 3-4 pulsanti (Impostazioni, Riproduci sulla
+           TV, Forza sincronizzazione, Sostituisci Sorgente) non ci stava tutta: sfondava lo
+           schermo invece di andare a capo. */
+        .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
         .actions form { margin: 0; }
+        .actions .btn, .actions button { flex: 0 0 auto; }
         @media (min-width: 640px) {
           .content { padding: 28px 32px; }
           .brand { font-size: 16px; }
@@ -227,52 +242,82 @@ private fun pageShell(content: String): String = """
     </html>
 """.trimIndent()
 
-private fun sourcesPage(sorgenti: List<Sorgente>): String {
-    val righe = if (sorgenti.isEmpty()) {
+private fun sourcesPage(sorgenti: List<Sorgente>, esiti: List<EsitoSorgente>, sincronizzato: Boolean): String {
+    // Una sola Sorgente e' configurabile alla volta (vedi SorgenteRepository.aggiungi): "Aggiungi"
+    // compare solo a lista vuota, altrimenti si Modifica o si Sostituisce quella gia' presente.
+    val sorgente = sorgenti.firstOrNull()
+    val esitoBanner = if (sincronizzato) {
+        """<div class="error" style="background:#ecfdf5;color:#065f46;">Sincronizzazione avviata sulla TV.</div>"""
+    } else {
+        ""
+    }
+    val righe = if (sorgente == null) {
         """<tr><td style="justify-content: center;">Nessuna Sorgente configurata</td></tr>"""
     } else {
-        sorgenti.joinToString(separator = "") { sorgente ->
-            val tipo = if (sorgente is Sorgente.M3u) "M3U" else "Xtream Codes"
-            val dettagli = when (sorgente) {
-                is Sorgente.M3u -> sorgente.url
-                is Sorgente.Xtream -> "host: ${sorgente.connection.host}:${sorgente.connection.port}"
-            }
-            """
-            <tr>
-              <td data-label="Nome" style="font-weight: 600;">${sorgente.nome.escapeHtml()}</td>
-              <td data-label="Tipo">$tipo</td>
-              <td data-label="Dettagli" style="color: #6b6b66; font-family: ui-monospace, monospace; font-size: 12.5px;">${dettagli.escapeHtml()}</td>
-              <td data-label="Azioni">
-                <div class="actions">
-                  <a class="btn btn-ghost" href="/sorgenti/${sorgente.id}/modifica">Modifica</a>
-                  <form method="post" action="/sorgenti/${sorgente.id}/elimina" onsubmit="return confirm('Rimuovere questa Sorgente?')">
-                    <button class="btn btn-danger" type="submit">Rimuovi</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            """.trimIndent()
+        val tipo = if (sorgente is Sorgente.M3u) "M3U" else "Xtream Codes"
+        val dettagli = when (sorgente) {
+            is Sorgente.M3u -> sorgente.url
+            is Sorgente.Xtream -> "host: ${sorgente.connection.host}:${sorgente.connection.port}"
         }
+        val esito = esiti.firstOrNull { it.nomeSorgente == sorgente.nome }
+        val statoSync = esito?.let { formattaEsitoSync(it) } ?: "Non ancora sincronizzata in questa sessione"
+        """
+        <tr>
+          <td data-label="Nome" style="font-weight: 600;">${sorgente.nome.escapeHtml()}</td>
+          <td data-label="Tipo">$tipo</td>
+          <td data-label="Dettagli" style="color: #6b6b66; font-family: ui-monospace, monospace; font-size: 12.5px;">${dettagli.escapeHtml()}</td>
+          <td data-label="Ultima sincronizzazione" style="color: ${if (esito?.erroreMessaggio != null) "#b91c1c" else "#6b6b66"};">${statoSync.escapeHtml()}</td>
+          <td data-label="Azioni">
+            <div class="actions">
+              <a class="btn btn-ghost" href="/sorgenti/${sorgente.id}/modifica">Modifica</a>
+              <form method="post" action="/sorgenti/${sorgente.id}/elimina" onsubmit="return confirm('Rimuovere questa Sorgente?')">
+                <button class="btn btn-danger" type="submit">Rimuovi</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        """.trimIndent()
     }
     return pageShell(
         """
         <div class="list-header">
           <div>
-            <div style="font-size: 20px; font-weight: 700;">Sorgenti</div>
-            <div style="font-size: 13px; color: #6b6b66;">Playlist M3U e account Xtream Codes configurati su questa Android TV</div>
+            <div style="font-size: 20px; font-weight: 700;">Sorgente</div>
+            <div style="font-size: 13px; color: #6b6b66;">Playlist M3U o account Xtream Codes configurato su questa Android TV: una sola alla volta</div>
           </div>
           <div class="actions">
             <a class="btn btn-ghost" href="/impostazioni">Impostazioni</a>
             <a class="btn btn-ghost" href="/riproduci">Riproduci sulla TV</a>
-            <a class="btn btn-primary" href="/sorgenti/nuova">+ Aggiungi Sorgente</a>
+            ${
+                if (sorgente == null) {
+                    """<a class="btn btn-primary" href="/sorgenti/nuova">+ Aggiungi Sorgente</a>"""
+                } else {
+                    """
+                    <form method="post" action="/sincronizza">
+                      <button class="btn btn-ghost" type="submit">Forza sincronizzazione</button>
+                    </form>
+                    <a class="btn btn-primary" href="/sorgenti/nuova">Sostituisci Sorgente</a>
+                    """.trimIndent()
+                }
+            }
           </div>
         </div>
+        $esitoBanner
         <table>
-          <thead><tr><th>Nome</th><th>Tipo</th><th>Dettagli</th><th></th></tr></thead>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Dettagli</th><th>Ultima sincronizzazione</th><th></th></tr></thead>
           <tbody>$righe</tbody>
         </table>
         """.trimIndent()
     )
+}
+
+private fun formattaEsitoSync(esito: EsitoSorgente): String {
+    val ora = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.ITALY).format(java.util.Date(esito.quando))
+    return if (esito.erroreMessaggio == null) {
+        "Riuscita alle $ora"
+    } else {
+        "Fallita alle $ora: ${esito.erroreMessaggio}"
+    }
 }
 
 private fun impostazioniPage(impostazioni: Impostazioni): String {

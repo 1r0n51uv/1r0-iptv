@@ -7,7 +7,7 @@ App IPTV personalizzata per Android TV (Live TV + Film + Serie), con un pannello
 ### Sorgenti e contenuti
 
 **Sorgente**:
-Una fonte di contenuti configurata dall'utente: una playlist M3U/M3U8 raggiungibile via URL, oppure un account Xtream Codes (host, username, password). Una Sorgente Xtream fornisce Canali, Film e Serie come tipi distinti e affidabili; una Sorgente M3U fornisce sempre Canali, con Film e Serie riconosciuti tramite euristica sul `group-title` (vedi ADR 0002). L'utente può configurare più Sorgenti contemporaneamente.
+Una fonte di contenuti configurata dall'utente: una playlist M3U/M3U8 raggiungibile via URL, oppure un account Xtream Codes (host, username, password). Una Sorgente Xtream fornisce Canali, Film e Serie come tipi distinti e affidabili; una Sorgente M3U fornisce sempre Canali, con Film e Serie riconosciuti tramite euristica sul `group-title` (vedi ADR 0002). L'utente configura una sola Sorgente alla volta: aggiungerne una dal Pannello Web sostituisce quella esistente.
 _Avoid_: Playlist, provider, lista
 
 **Canale**:
@@ -45,7 +45,7 @@ Impostazioni locali applicate dall'utente a un Canale/Film/Serie che non derivan
 _Avoid_: Override, flag
 
 **Chiave di Identità**:
-L'identificatore stabile di un Canale/Film/Episodio tra un refresh e l'altro della Sorgente: il `tvg-id` se presente, altrimenti l'URL dello stream. Una Serie, che non ha un URL proprio, è identificata dal suo nome. Usata per riagganciare le Personalizzazioni e i Visti dopo un aggiornamento della Sorgente.
+L'identificatore stabile di un Canale/Film/Episodio tra un refresh e l'altro della Sorgente: per le Sorgenti Xtream l'id numerico dello stream (es. `xtream-film:123`), stabile anche quando il provider ruota host o credenziali; per le Sorgenti M3U il `tvg-id` se presente, altrimenti l'URL dello stream. Una Serie, che non ha un URL proprio, è identificata dal suo nome. Usata per riagganciare le Personalizzazioni e i Visti dopo un aggiornamento della Sorgente.
 
 ### Cronologia, scoperta e navigazione
 

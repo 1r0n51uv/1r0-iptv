@@ -100,7 +100,7 @@ class RegistroVistiTest {
     }
 
     @Test
-    fun `continue watching leaves out completed content`() {
+    fun `continue watching leaves out a completed Film`() {
         val visti = listOf(
             film(chiave = "dune", posizioneMs = 600_000, durataMs = 9_960_000),
             film(chiave = "arrival", posizioneMs = 9_800_000, durataMs = 9_960_000)
@@ -109,6 +109,27 @@ class RegistroVistiTest {
         val ripresa = registro.continuaAGuardare(visti)
 
         assertEquals(listOf("dune"), ripresa.map { it.chiaveIdentita })
+    }
+
+    @Test
+    fun `continue watching keeps a Serie whose most recent Episodio was just completed`() {
+        // Bug reale osservato in campo: finire un Episodio lo faceva sparire del tutto da
+        // Continua a guardare invece di lasciare la Serie li' come punto di ingresso verso il
+        // prossimo Episodio (calcolato da ProssimaVisioneResolver quando si apre la card).
+        val visti = listOf(
+            episodio(chiave = "bear-s01e01", serie = "The Bear", posizioneMs = 100, aggiornatoIl = 100),
+            episodio(
+                chiave = "bear-s01e02",
+                serie = "The Bear",
+                posizioneMs = 1_799_000,
+                durataMs = 1_800_000,
+                aggiornatoIl = 400
+            )
+        )
+
+        val ripresa = registro.continuaAGuardare(visti)
+
+        assertEquals(listOf("bear-s01e02"), ripresa.map { it.chiaveIdentita })
     }
 
     @Test

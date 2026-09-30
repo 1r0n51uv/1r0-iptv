@@ -1,6 +1,6 @@
 # 1r0 IPTV
 
-App IPTV personalizzata per Android TV (Kotlin, Compose for TV, Media3), con un pannello di gestione web integrato per configurare Sorgenti (playlist M3U o account Xtream Codes) senza usare il telecomando.
+App IPTV personalizzata per Android TV (Kotlin, Compose for TV, Media3), con un pannello di gestione web integrato per configurare la Sorgente (playlist M3U o account Xtream Codes) e forzarne la sincronizzazione senza usare il telecomando.
 
 Vedi [`CONTEXT.md`](CONTEXT.md) per il glossario di dominio, [`docs/adr/`](docs/adr/) per le decisioni architetturali e [`ROADMAP.md`](ROADMAP.md) per lo stato delle funzionalità.
 

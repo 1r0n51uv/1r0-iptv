@@ -24,6 +24,7 @@ import com.ir0.iptv.domain.source.xtream.XtreamMapper
 import com.ir0.iptv.domain.source.xtream.XtreamSeriesInfoDto
 import com.ir0.iptv.domain.source.xtream.XtreamVodStreamDto
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -47,17 +48,32 @@ class ContentFetcher(
         sorgenti: List<Sorgente>,
         /** Chiamato prima di contattare ogni Sorgente: pilota la schermata di caricamento del
          * primissimo avvio e l'anello di avanzamento sull'icona "Aggiorna catalogo" in Sidebar. */
-        onProgresso: (indice: Int, totale: Int, sorgente: Sorgente) -> Unit = { _, _, _ -> }
+        onProgresso: (indice: Int, totale: Int, sorgente: Sorgente) -> Unit = { _, _, _ -> },
+        /** Da 0f a 1f, quanto e' avanzata la Sorgente in corso (azzerato all'inizio di ognuna):
+         * riempie il bordo dell'icona "Aggiorna catalogo" in Sidebar invece di limitarsi a farla
+         * ruotare. Basato sui byte scaricati quando il server dichiara Content-Length (M3U) o sui
+         * passi completati (Xtream: tre liste di categorie e tre di contenuti). */
+        onProgressoFrazionale: (Float) -> Unit = {},
+        /** Chiamato dopo ogni Sorgente con l'esito (null = riuscita): pilota lo stato mostrato nel
+         * Pannello Web, cosi' una Sorgente irraggiungibile non fallisce piu' in silenzio. */
+        onEsito: (sorgente: Sorgente, erroreMessaggio: String?) -> Unit = { _, _ -> }
     ): ContentCatalog = withContext(Dispatchers.IO) {
         val cataloghi = sorgenti.mapIndexed { indice, sorgente ->
             onProgresso(indice, sorgenti.size, sorgente)
+            onProgressoFrazionale(0f)
             try {
-                when (sorgente) {
-                    is Sorgente.M3u -> catalogoDaM3u(sorgente)
-                    is Sorgente.Xtream -> catalogoDaXtream(sorgente)
+                val risultato = when (sorgente) {
+                    is Sorgente.M3u -> catalogoDaM3u(sorgente, onProgressoFrazionale)
+                    is Sorgente.Xtream -> catalogoDaXtream(sorgente, onProgressoFrazionale)
                 }
+                onEsito(sorgente, null)
+                risultato
             } catch (e: Exception) {
+                // Il Registro dell'app resta locale al dispositivo: qui si tiene lo stack trace
+                // completo (username/password incluse nell'URL, se e' quello il messaggio) perche'
+                // e' l'unico posto dove serve davvero per capire cosa e' andato storto.
                 RegistroApp.errore("Sorgente", "Sincronizzazione fallita per '${sorgente.nome}'", e)
+                onEsito(sorgente, e.messaggioSenzaCredenziali())
                 ContentCatalog()
             }
         }
@@ -98,8 +114,13 @@ class ContentFetcher(
         }.orEmpty()
     }
 
-    private fun catalogoDaM3u(sorgente: Sorgente.M3u): ContentCatalog {
-        val entries = m3uParser.parse(scarica(sorgente.url))
+    private fun catalogoDaM3u(sorgente: Sorgente.M3u, onProgressoFrazionale: (Float) -> Unit): ContentCatalog {
+        // Non "scarica(...)": una playlist M3U reale puo' pesare decine o centinaia di MB di
+        // testo (un provider con panel puo' includere decine di migliaia di Canali/Film/Serie).
+        // Materializzarla come un'unica String, come faceva prima, e' esattamente il genere di
+        // allocazione che manda in OutOfMemoryError l'heap ristretto di una TV - confermato da un
+        // crash reale sul dispositivo passando da una Sorgente Xtream a M3U dello stesso account.
+        val entries = scaricaRighe(sorgente.url, onProgressoFrazionale) { righe -> m3uParser.parse(righe) }
         val perTipo = entries.groupBy { contentClassifier.classify(it) }
 
         val canali = perTipo[ContentType.CANALE].orEmpty().map { it.toCanaleCard() }
@@ -110,18 +131,41 @@ class ContentFetcher(
         return ContentCatalog(canali = canali, film = film, serie = serie)
     }
 
-    private fun catalogoDaXtream(sorgente: Sorgente.Xtream): ContentCatalog {
+    private fun catalogoDaXtream(sorgente: Sorgente.Xtream, onProgressoFrazionale: (Float) -> Unit): ContentCatalog {
         val connection = sorgente.connection
 
+        // Sei passi in tutto (tre liste di categorie, tre di contenuti): l'avanzamento complessivo
+        // e' il passo gia' completato piu' l'eventuale avanzamento a byte del passo in corso, cosi'
+        // il bordo dell'icona in Sidebar si riempie con continuita' invece di saltare a scatti.
+        val passiTotali = 6
+        var passiCompletati = 0
+        val progressoPasso: (Float) -> Unit = { frazionePasso ->
+            onProgressoFrazionale(((passiCompletati + frazionePasso) / passiTotali).coerceIn(0f, 1f))
+        }
+        fun completaPasso() {
+            passiCompletati++
+            onProgressoFrazionale((passiCompletati.toFloat() / passiTotali).coerceIn(0f, 1f))
+        }
+
+        // Non avvolta in tryOrEmpty a differenza delle altre chiamate qui sotto: se il provider e'
+        // irraggiungibile (server giu', credenziali scadute...) deve saltare fuori subito e risalire
+        // fino a "catalogo()", che la registra e la segnala come esito di sincronizzazione fallito.
+        // Prima di questo fix un provider giu' produceva tre liste vuote in silenzio (ognuna
+        // avvolta nel proprio tryOrEmpty) senza che nulla, ne' il Registro ne' il Pannello Web,
+        // lo segnalasse: sembrava un catalogo vuoto per davvero, non una Sorgente irraggiungibile.
+        val categorieCanali = streamJsonArray(xtreamApiUrl(connection, "get_live_categories"), progressoPasso) { readCategoria() }
+            .associate { it.id to it.name }
+        completaPasso()
         // Molti provider non mandano category_name sui singoli Canali/Film/Serie: le tre liste
         // di categorie risolvono category_id -> nome. Se una lista fallisce si prosegue senza,
         // la categoria resta null e il contenuto cade nel gruppo di ripiego invece di sparire.
-        val categorieCanali = categorie(connection, "get_live_categories")
-        val categorieFilm = categorie(connection, "get_vod_categories")
-        val categorieSerie = categorie(connection, "get_series_categories")
+        val categorieFilm = categorie(connection, "get_vod_categories", progressoPasso)
+        completaPasso()
+        val categorieSerie = categorie(connection, "get_series_categories", progressoPasso)
+        completaPasso()
 
         val canali = tryOrEmpty {
-            streamJsonArray(xtreamApiUrl(connection, "get_live_streams")) { readLiveStreamDto() }
+            streamJsonArray(xtreamApiUrl(connection, "get_live_streams"), progressoPasso) { readLiveStreamDto() }
                 .map { dto ->
                     xtreamMapper.toChannel(dto, connection).toCanaleCard()
                         .copy(
@@ -130,9 +174,10 @@ class ContentFetcher(
                         )
                 }
         }
+        completaPasso()
 
         val film = tryOrEmpty {
-            streamJsonArray(xtreamApiUrl(connection, "get_vod_streams")) { readVodStreamDto() }
+            streamJsonArray(xtreamApiUrl(connection, "get_vod_streams"), progressoPasso) { readVodStreamDto() }
                 .map { dto ->
                     val movie = xtreamMapper.toMovie(dto, connection)
                     ContentCard.Film(
@@ -145,9 +190,10 @@ class ContentFetcher(
                     )
                 }
         }
+        completaPasso()
 
         val serie = tryOrEmpty {
-            streamJsonArray(xtreamApiUrl(connection, "get_series")) { readSeriesListItem() }
+            streamJsonArray(xtreamApiUrl(connection, "get_series"), progressoPasso) { readSeriesListItem() }
                 .map { item ->
                     ContentCard.SerieCard.DaCaricare(
                         title = item.name,
@@ -159,23 +205,25 @@ class ContentFetcher(
                     )
                 }
         }
+        completaPasso()
 
         return ContentCatalog(canali = canali, film = film, serie = serie)
     }
 
-    private fun categorie(connection: XtreamConnection, azione: String): Map<String, String> =
-        tryOrEmpty { streamJsonArray(xtreamApiUrl(connection, azione)) { readCategoria() } }
+    private fun categorie(connection: XtreamConnection, azione: String, onProgresso: (Float) -> Unit = {}): Map<String, String> =
+        tryOrEmpty { streamJsonArray(xtreamApiUrl(connection, azione), onProgresso) { readCategoria() } }
             .associate { it.id to it.name }
 
     /** Reads a large JSON array straight off the response stream, one object at a time, instead of
      * materializing the whole (often tens of MB) response body as a String first - real Xtream
      * catalogs are big enough that doing so risks an OutOfMemoryError on a TV's constrained heap. */
-    private fun <T> streamJsonArray(url: String, parseItem: JsonReader.() -> T): List<T> {
+    private fun <T> streamJsonArray(url: String, onProgresso: (Float) -> Unit = {}, parseItem: JsonReader.() -> T): List<T> {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = CONNECT_TIMEOUT_MS
         connection.readTimeout = READ_TIMEOUT_MS
         return try {
-            JsonReader(InputStreamReader(connection.inputStream, Charsets.UTF_8)).use { reader ->
+            val stream = StreamConProgresso(connection.inputStream, connection.contentLengthLong, onProgresso)
+            JsonReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
                 reader.isLenient = true
                 val results = mutableListOf<T>()
                 reader.beginArray()
@@ -185,6 +233,21 @@ class ContentFetcher(
                 reader.endArray()
                 results
             }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** Come [scarica], ma passa le righe della risposta una alla volta invece di materializzarle
+     * tutte insieme in un'unica String: per una risposta potenzialmente enorme (una playlist M3U
+     * reale) e' l'unico modo per non rischiare un OutOfMemoryError sull'heap ristretto di una TV. */
+    private fun <T> scaricaRighe(url: String, onProgresso: (Float) -> Unit = {}, azione: (Sequence<String>) -> T): T {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = CONNECT_TIMEOUT_MS
+        connection.readTimeout = READ_TIMEOUT_MS
+        return try {
+            val stream = StreamConProgresso(connection.inputStream, connection.contentLengthLong, onProgresso)
+            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).useLines(azione)
         } finally {
             connection.disconnect()
         }
@@ -202,6 +265,52 @@ class ContentFetcher(
     }
 }
 
+/** Avvolge lo stream della risposta per riportare quanto letto rispetto al Content-Length
+ * dichiarato dal server: pilota il bordo di avanzamento sull'icona "Aggiorna catalogo" in
+ * Sidebar. Non essenziale al parsing (che continua a leggere da questo stream come se fosse
+ * quello originale), quindi se il server non dichiara la lunghezza semplicemente non riporta
+ * nulla invece di fallire o inventare un numero. */
+private class StreamConProgresso(
+    private val delegato: InputStream,
+    contentLength: Long,
+    private val onProgresso: (Float) -> Unit
+) : InputStream() {
+    private val lunghezzaAttesa = contentLength.takeIf { it > 0 }
+    private var letti = 0L
+    private var ultimaPercentualeInviata = -1
+
+    override fun read(): Int {
+        val b = delegato.read()
+        if (b >= 0) segnala(1)
+        return b
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        val n = delegato.read(b, off, len)
+        if (n > 0) segnala(n)
+        return n
+    }
+
+    private fun segnala(n: Int) {
+        val lunghezza = lunghezzaAttesa ?: return
+        letti += n
+        // Un aggiornamento per punto percentuale basta: niente ricomposizione ad ogni singola read().
+        val percentuale = ((letti * 100) / lunghezza).toInt().coerceIn(0, 100)
+        if (percentuale != ultimaPercentualeInviata) {
+            ultimaPercentualeInviata = percentuale
+            onProgresso(percentuale / 100f)
+        }
+    }
+
+    override fun close() = delegato.close()
+}
+
+/** Il messaggio di una `FileNotFoundException` di rete e' l'URL della richiesta per intero: per
+ * una Sorgente Xtream questo include username e password nella query string. Qui si taglia via la
+ * query string prima che il messaggio finisca nel Registro dell'app o nel Pannello Web. */
+private fun Exception.messaggioSenzaCredenziali(): String =
+    (message ?: toString()).substringBefore("?")
+
 private inline fun <T> tryOrEmpty(block: () -> List<T>): List<T> = try {
     block()
 } catch (e: Exception) {
@@ -215,10 +324,10 @@ private inline fun <T> tryOrNull(block: () -> T): T? = try {
 }
 
 private fun M3uEntry.toCanaleCard() =
-    ContentCard.Canale(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle)
+    ContentCard.Canale(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle, tvgId = tvgId)
 
 private fun M3uEntry.toFilmCard() =
-    ContentCard.Film(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle)
+    ContentCard.Film(title = title, imageUrl = tvgLogo, streamUrl = url, categoria = groupTitle, tvgId = tvgId)
 
 private fun xtreamApiUrl(connection: XtreamConnection, action: String): String =
     "http://${connection.host}:${connection.port}/player_api.php" +

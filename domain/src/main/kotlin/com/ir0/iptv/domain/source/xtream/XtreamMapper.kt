@@ -47,7 +47,8 @@ class XtreamMapper {
                                 title = episode.title,
                                 url = url,
                                 episodeNumber = episode.episodeNum,
-                                immagine = episode.immagine
+                                immagine = episode.immagine,
+                                xtreamId = episode.id
                             )
                         }
                 )

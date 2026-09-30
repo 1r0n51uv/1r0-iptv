@@ -17,7 +17,7 @@ class ProssimaVisioneResolver(private val registro: RegistroVisti = RegistroVist
 
         val perChiave = visti.associateBy { it.chiaveIdentita }
         val ultimo = episodi.withIndex()
-            .mapNotNull { (indice, episodio) -> perChiave[episodio.url]?.let { indice to it } }
+            .mapNotNull { (indice, episodio) -> perChiave[episodio.chiaveIdentita]?.let { indice to it } }
             .maxWithOrNull(compareBy({ it.second.aggiornatoIl }, { it.first }))
             ?: return ProssimaVisione.Inizia(episodi.first())
 

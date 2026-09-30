@@ -20,9 +20,11 @@ class SorgenteRepository(context: Context) {
     @Synchronized
     fun trova(id: String): Sorgente? = elenco().firstOrNull { it.id == id }
 
+    /** Una sola Sorgente e' configurabile alla volta: aggiungerne una nuova sostituisce quella
+     * eventualmente gia' presente, invece di accumularle. */
     @Synchronized
     fun aggiungi(sorgente: Sorgente) {
-        salva(elenco() + sorgente)
+        salva(listOf(sorgente))
     }
 
     @Synchronized

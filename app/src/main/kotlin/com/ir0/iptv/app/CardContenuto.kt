@@ -59,6 +59,10 @@ fun CardContenuto(
     percentuale: Int = 0,
     preferito: Boolean = false,
     focusRequester: FocusRequester? = null,
+    /** Bersaglio esplicito di un altro elemento (es. il pulsante Riprendi dell'hero, per GIU'):
+     * un secondo `FocusRequester` sullo stesso nodo, indipendente da [focusRequester] che invece
+     * serve al ripristino del focus sulla card aperta l'ultima volta. */
+    focusRequesterAggiuntivo: FocusRequester? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {}
 ) {
@@ -94,6 +98,7 @@ fun CardContenuto(
                 .width(larghezza)
                 .height(altezza)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                .let { if (focusRequesterAggiuntivo != null) it.focusRequester(focusRequesterAggiuntivo) else it }
                 .onFocusChanged { infocata = it.isFocused }
                 .pressabile(onClick = onClick, onLongClick = onLongClick)
         ) {

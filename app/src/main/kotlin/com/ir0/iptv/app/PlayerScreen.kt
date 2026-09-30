@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,13 +55,18 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.video.MediaCodecVideoDecoderException
 import androidx.media3.ui.PlayerView
 import com.ir0.iptv.app.logging.RegistroApp
 import com.ir0.iptv.app.playback.RichiestaRiproduzione
 import com.ir0.iptv.app.theme.LocalAccento
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val INTERVALLO_SALVATAGGIO_MS = 10_000L
 private const val RITENTATIVI_MASSIMI_ERRORE = 5
@@ -82,8 +89,21 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scopeRitentativo = rememberCoroutineScope()
+    // Un decoder hardware vendor (es. "OMX.MS.AVC.Decoder" su alcune TV Xiaomi/Mediatek) puo'
+    // andare in errore irreversibile su uno stream specifico pur avendo inizializzato bene:
+    // ExoPlayer non lo esclude da solo sui retry successivi e ripete lo stesso errore all'infinito.
+    // Qui teniamo i nomi dei decoder gia' falliti per questo stream ed li escludiamo a mano dal
+    // prossimo tentativo (fallback al decoder successivo disponibile, tipicamente software).
+    val decoderDaEvitare = remember(richiesta.streamUrl) { mutableSetOf<String>() }
     val exoPlayer = remember(richiesta.streamUrl) {
-        ExoPlayer.Builder(context).build().apply {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+                MediaCodecSelector.DEFAULT
+                    .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+                    .filterNot { it.name in decoderDaEvitare }
+            }
+        ExoPlayer.Builder(context, renderersFactory).build().apply {
             setMediaItem(MediaItem.fromUri(richiesta.streamUrl))
             if (posizioneIniziale > 0) seekTo(posizioneIniziale)
             prepare()
@@ -113,9 +133,22 @@ fun PlayerScreen(
     // bloccato senza spiegazione. Resta vero finche' non cambia il contenuto (nessun recupero
     // automatico oltre i retry gia' tentati).
     var erroreDefinitivo by remember(richiesta.streamUrl) { mutableStateOf(false) }
+    // Un canale/film che si "blocca" durante la visione e' quasi sempre questo: ExoPlayer torna
+    // in STATE_BUFFERING (a volte per un attimo, a volte per parecchi secondi) senza che prima
+    // ci fosse alcun segnale a schermo del perche'. Copre sia il caricamento iniziale sia un
+    // ribuffering a meta' visione: e' lo stesso stato in entrambi i casi.
+    var bufferizzando by remember(richiesta.streamUrl) { mutableStateOf(false) }
+    var percentualeBuffer by remember(richiesta.streamUrl) { mutableStateOf(0) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    LaunchedEffect(exoPlayer, bufferizzando) {
+        while (bufferizzando) {
+            percentualeBuffer = exoPlayer.bufferedPercentage
+            delay(300)
+        }
+    }
 
     LaunchedEffect(exoPlayer, mostraControlli) {
         while (mostraControlli) {
@@ -162,7 +195,13 @@ fun PlayerScreen(
         LaunchedEffect(exoPlayer) {
             while (true) {
                 delay(INTERVALLO_SALVATAGGIO_MS)
-                onProgresso(exoPlayer.currentPosition, exoPlayer.durataNota())
+                // ExoPlayer va letto sul thread di UI, ma "onProgresso" scrive un file JSON di
+                // qualche decina di KB: farlo qui bloccherebbe il thread di UI ogni 10 secondi
+                // durante OGNI riproduzione, un jank periodico osservato come reale sul
+                // dispositivo (frame da oltre un secondo in logcat proprio durante la visione).
+                val posizioneMs = exoPlayer.currentPosition
+                val durataMs = exoPlayer.durataNota()
+                withContext(Dispatchers.IO) { onProgresso(posizioneMs, durataMs) }
             }
         }
     }
@@ -184,6 +223,12 @@ fun PlayerScreen(
                     return
                 }
                 ritentativi++
+                // A differenza di un errore di rete/Sorgente, un fallimento del decoder si
+                // ripete identico sullo stesso decoder ad ogni retry: escluderlo forza il
+                // prossimo tentativo su un decoder diverso invece di ripetere lo stesso errore.
+                (error.cause as? MediaCodecVideoDecoderException)?.codecInfo?.name?.let { nomeDecoder ->
+                    decoderDaEvitare += nomeDecoder
+                }
                 scopeRitentativo.launch {
                     delay(ATTESA_RITENTATIVO_MS)
                     exoPlayer.prepare()
@@ -196,6 +241,7 @@ fun PlayerScreen(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) ritentativi = 0
+                bufferizzando = playbackState == Player.STATE_BUFFERING
                 // STATE_ENDED puo' arrivare piu' volte (es. un seek dopo la fine): il primo basta.
                 if (playbackState == Player.STATE_ENDED && tracciaProgresso && !terminataNotificata) {
                     terminataNotificata = true
@@ -207,7 +253,10 @@ fun PlayerScreen(
 
         onDispose {
             exoPlayer.removeListener(listener)
-            if (tracciaProgresso) {
+            // Un fallimento definitivo non ha mai davvero riprodotto nulla: salvare la posizione
+            // (quasi sempre 0) lo farebbe comunque risalire in cima a "Continua a guardare" solo
+            // per l'orario di salvataggio, mascherando contenuti con un avanzamento reale.
+            if (tracciaProgresso && !erroreDefinitivo) {
                 onProgresso(exoPlayer.currentPosition, exoPlayer.durataNota())
             }
             exoPlayer.release()
@@ -321,6 +370,37 @@ fun PlayerScreen(
                             .background(Color(0x99000000))
                             .padding(horizontal = 20.dp, vertical = 12.dp)
                     )
+                }
+                if (bufferizzando && !erroreDefinitivo) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x99000000))
+                            .padding(horizontal = 24.dp, vertical = 18.dp)
+                    ) {
+                        // Percentuale solo se ExoPlayer la conosce davvero (bufferedPercentage
+                        // resta a 0 finche' non ha ancora scaricato nulla): un anello indefinito
+                        // finche' non c'e' un numero sensato da mostrare, invece di un fisso "0%"
+                        // che sembrerebbe bloccato fin dal primo istante.
+                        if (percentualeBuffer > 0) {
+                            CircularProgressIndicator(
+                                progress = { percentualeBuffer / 100f },
+                                color = LocalAccento.current,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        } else {
+                            CircularProgressIndicator(color = LocalAccento.current, modifier = Modifier.size(36.dp))
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = if (percentualeBuffer > 0) "Caricamento… $percentualeBuffer%" else "Caricamento…",
+                            color = Color(0xFFF2F2F0),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
                 if (erroreDefinitivo) {
                     Column(

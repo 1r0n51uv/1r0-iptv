@@ -86,4 +86,23 @@ class M3uParserTest {
 
         assertEquals(listOf("Rai 1", "Rai 2"), entries.map { it.title })
     }
+
+    @Test
+    fun `parsing a line Sequence gives the same result as parsing the equivalent String`() {
+        // Chi scarica una playlist reale la passa riga per riga da uno stream di rete (vedi
+        // ContentFetcher.scaricaRighe), invece di materializzarla tutta come una String: le due
+        // vie devono restare equivalenti.
+        val righe = sequenceOf(
+            "#EXTM3U",
+            "#EXTINF:-1 tvg-id=\"rai1.it\" group-title=\"Generaliste\",Rai 1",
+            "http://example.com/rai1.m3u8",
+            "#EXTINF:-1,Rai 2",
+            "http://example.com/rai2.m3u8"
+        )
+
+        val entries = M3uParser().parse(righe)
+
+        assertEquals(listOf("Rai 1", "Rai 2"), entries.map { it.title })
+        assertEquals("Generaliste", entries.first().groupTitle)
+    }
 }

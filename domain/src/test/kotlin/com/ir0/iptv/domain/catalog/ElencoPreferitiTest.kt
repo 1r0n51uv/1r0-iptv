@@ -62,6 +62,13 @@ class ElencoPreferitiTest {
     }
 
     @Test
+    fun `toggling a Preferito stamps the content's title, to reconcile it later if the Chiave changes`() {
+        val acceso = elenco.cambiaPreferito(emptyMap(), dune)
+
+        assertEquals("Dune", acceso.getValue(dune.chiaveIdentita).titolo)
+    }
+
+    @Test
     fun `toggling turns a content into a Preferito and back`() {
         val acceso = elenco.cambiaPreferito(emptyMap(), dune)
         assertTrue(elenco.preferito(acceso, dune))
@@ -76,7 +83,7 @@ class ElencoPreferitiTest {
 
         val acceso = elenco.cambiaPreferito(personalizzazioni, dune)
 
-        assertEquals(ContentCustomization(hidden = true, favorite = true), acceso[dune.chiaveIdentita])
+        assertEquals(ContentCustomization(hidden = true, favorite = true, titolo = "Dune"), acceso[dune.chiaveIdentita])
     }
 }
 

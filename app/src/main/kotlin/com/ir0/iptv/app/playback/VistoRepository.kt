@@ -2,7 +2,10 @@ package com.ir0.iptv.app.playback
 
 import android.content.Context
 import com.ir0.iptv.domain.catalog.ContentCard
+import com.ir0.iptv.domain.catalog.ContentCatalog
+import com.ir0.iptv.domain.catalog.migraChiaveIdentita
 import com.ir0.iptv.domain.playback.RegistroVisti
+import com.ir0.iptv.domain.playback.RiconciliazioneVisti
 import com.ir0.iptv.domain.playback.TipoVisto
 import com.ir0.iptv.domain.playback.Visto
 import java.io.File
@@ -12,6 +15,7 @@ import org.json.JSONObject
 class VistoRepository(
     context: Context,
     private val registro: RegistroVisti = RegistroVisti(),
+    private val riconciliazione: RiconciliazioneVisti = RiconciliazioneVisti(),
     private val orologio: () -> Long = System::currentTimeMillis
 ) {
     private val file = File(context.applicationContext.filesDir, "visti.json")
@@ -35,6 +39,17 @@ class VistoRepository(
 
     @Synchronized
     fun continuaAGuardare(): List<Visto> = registro.continuaAGuardare(elenco())
+
+    /** Riaggancia al catalogo appena sincronizzato i Visti la cui Chiave e' cambiata (es. la
+     * Sorgente e' passata da Xtream a M3U dello stesso provider o viceversa - Fase 13),
+     * abbinandoli per titolo quando non e' ambiguo. Va chiamata dopo ogni sincronizzazione
+     * riuscita: se non cambia nulla non riscrive il file. */
+    @Synchronized
+    fun riconcilia(catalogo: ContentCatalog) {
+        val correnti = elenco()
+        val riconciliati = riconciliazione.riconcilia(correnti, catalogo)
+        if (riconciliati != correnti) file.writeText(JSONArray(riconciliati.map { it.toJson() }).toString())
+    }
 
     /** Toglie un contenuto dai Visti (quindi da "Continua a guardare"): per una Serie elimina i
      * Visti di tutti i suoi Episodi, per Film/Canale il Visto con quella Chiave di Identita'. */
@@ -84,7 +99,9 @@ private fun Visto.toJson(): JSONObject = JSONObject()
     .put("posterUrl", posterUrl)
 
 private fun JSONObject.toVisto(): Visto = Visto(
-    chiaveIdentita = getString("chiaveIdentita"),
+    // Riscrive al volo una vecchia Chiave (l'URL completo dello stream Xtream, che cambia se il
+    // provider ruota host/credenziali) nella nuova forma stabile: vedi ChiaveIdentitaXtream.
+    chiaveIdentita = migraChiaveIdentita(getString("chiaveIdentita")),
     tipo = TipoVisto.valueOf(getString("tipo")),
     titolo = getString("titolo"),
     streamUrl = getString("streamUrl"),

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -55,6 +56,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -151,7 +153,8 @@ private fun DettaglioFilm(
         titolo = card.title,
         streamUrl = card.streamUrl,
         tipo = TipoVisto.FILM,
-        posterUrl = card.imageUrl
+        posterUrl = card.imageUrl,
+        chiaveIdentita = card.chiaveIdentita
     )
     val posizione = registro.posizioneDiRipresa(visti, card.chiaveIdentita)
     val percentuale = registro.percentuale(visti, card.chiaveIdentita)
@@ -241,6 +244,7 @@ private fun DettaglioSerie(
         streamUrl = episodio.url,
         tipo = TipoVisto.EPISODIO,
         serie = serie.name,
+        chiaveIdentita = episodio.chiaveIdentita,
         // Immagine: prima l'Episodio, poi la copertina della Stagione, poi la locandina della Serie.
         posterUrl = episodio.immagine
             ?: navigazione.stagioneDi(serie, episodio)?.immagine
@@ -312,6 +316,19 @@ private fun DettaglioSerie(
                 }
             }
             PulsantePreferito(preferito, onCambiaPreferito)
+            // Sulle card (Dashboard/Sfoglia) c'e' gia' "Togli da Continua a guardare", ma solo
+            // quando la Serie vi compare. Qui, sulla sua pagina, l'azione e' sempre a portata di
+            // mano quando c'e' almeno un Episodio visto: utile per un rewatch o per pulizia,
+            // senza dover prima trovare la card giusta altrove.
+            if (visti.any { it.serie == serie.name }) {
+                PulsanteAzione(
+                    testo = "Segna serie come non vista",
+                    icona = Icons.Filled.RemoveCircleOutline,
+                    onClick = {
+                        onResetVisti(serie.seasons.flatMap { it.episodes }.map { it.chiaveIdentita }.toSet())
+                    }
+                )
+            }
         }
 
         if (serie.seasons.isNotEmpty()) {
@@ -321,7 +338,7 @@ private fun DettaglioSerie(
                 visti = visti,
                 onSeleziona = { stagioneSelezionata = it },
                 onSegnaStagioneNonVista = { stagione ->
-                    onResetVisti(stagione.episodes.map { it.url }.toSet())
+                    onResetVisti(stagione.episodes.map { it.chiaveIdentita }.toSet())
                 }
             )
         }
@@ -342,12 +359,12 @@ private fun DettaglioSerie(
                 onEpisodioClick = { episodio ->
                     onRiproduci(
                         richiestaDi(episodio),
-                        registro.posizioneDiRipresa(visti, episodio.url) ?: 0L,
+                        registro.posizioneDiRipresa(visti, episodio.chiaveIdentita) ?: 0L,
                         codaDopo(episodio)
                     )
                 },
                 onEpisodioRiproduciCon = { episodio -> onRiproduciCon(richiestaDi(episodio)) },
-                onEpisodioSegnaNonVisto = { episodio -> onResetVisti(setOf(episodio.url)) }
+                onEpisodioSegnaNonVisto = { episodio -> onResetVisti(setOf(episodio.chiaveIdentita)) }
             )
         }
     }
@@ -600,7 +617,8 @@ private fun nomeStagione(stagione: Stagione): String = stagione.number?.let { "S
 
 /** Il dropdown Stagioni mostra al massimo 6 voci (48.dp l'una + 8.dp di padding sopra e sotto);
  * oltre, si scorre. Non si adatta a quante ne entrano nello schermo. */
-private val ALTEZZA_MAX_DROPDOWN_STAGIONI = 48.dp * 6 + 16.dp
+private val ALTEZZA_VOCE_DROPDOWN_STAGIONI = 48.dp
+private val ALTEZZA_MAX_DROPDOWN_STAGIONI = ALTEZZA_VOCE_DROPDOWN_STAGIONI * 6 + 16.dp
 
 @Composable
 private fun SelettoreStagioni(
@@ -616,7 +634,26 @@ private fun SelettoreStagioni(
     val accento = LocalAccento.current
     val stagioneCorrente = selezionata ?: stagioni.firstOrNull()
     val haVistoStagione = stagioneCorrente != null &&
-        stagioneCorrente.episodes.any { ep -> visti.any { it.chiaveIdentita == ep.url } }
+        stagioneCorrente.episodes.any { ep -> visti.any { it.chiaveIdentita == ep.chiaveIdentita } }
+
+    // Aprendo il selettore da una Stagione avanzata (es. la decima di venti) il dropdown partiva
+    // sempre scrollato in cima, lontano dalla voce gia' scelta: bisognava scorrere a mano per
+    // ritrovarla. Qui si centra subito sulla voce corrente, invece di lasciare che il dropdown
+    // apra semplicemente dall'inizio.
+    val statoScrollDropdown = rememberScrollState()
+    val densita = LocalDensity.current
+    LaunchedEffect(espanso) {
+        if (!espanso) return@LaunchedEffect
+        val indice = stagioni.indexOfFirst { it.number == selezionata?.number }
+        if (indice <= 0) return@LaunchedEffect
+        withFrameNanos { } // il dropdown deve essersi gia' composto prima di poterlo scorrere.
+        val altezzaVoce = with(densita) { ALTEZZA_VOCE_DROPDOWN_STAGIONI.toPx() }
+        val altezzaVisibile = with(densita) { ALTEZZA_MAX_DROPDOWN_STAGIONI.toPx() }
+        val destinazione = (indice * altezzaVoce - (altezzaVisibile - altezzaVoce) / 2)
+            .toInt()
+            .coerceAtLeast(0)
+        statoScrollDropdown.scrollTo(destinazione)
+    }
 
     Box {
         Row(
@@ -644,6 +681,7 @@ private fun SelettoreStagioni(
             DropdownMenu(
                 expanded = espanso,
                 onDismissRequest = { espanso = false },
+                scrollState = statoScrollDropdown,
                 modifier = Modifier.heightIn(max = ALTEZZA_MAX_DROPDOWN_STAGIONI)
             ) {
                 stagioni.forEach { stagione ->
@@ -697,8 +735,8 @@ private fun CarouselEpisodi(
             CardEpisodio(
                 episodio = episodio,
                 immagine = immagine,
-                percentuale = registro.percentuale(visti, episodio.url),
-                haVisto = visti.any { it.chiaveIdentita == episodio.url },
+                percentuale = registro.percentuale(visti, episodio.chiaveIdentita),
+                haVisto = visti.any { it.chiaveIdentita == episodio.chiaveIdentita },
                 onClick = { onEpisodioClick(episodio) },
                 onRiproduciCon = { onEpisodioRiproduciCon(episodio) },
                 onSegnaNonVisto = { onEpisodioSegnaNonVisto(episodio) }
